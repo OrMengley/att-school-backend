@@ -1,0 +1,57 @@
+package main
+
+import (
+	"school-attendance/controllers"
+	"school-attendance/db" // add this
+	"school-attendance/middleware"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+
+	db.ConnectMongo() // connect to MongoDB
+	r := gin.Default()
+
+	// ✅ Enable CORS for frontend requests
+	// r.Use(cors.Default())
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "School Attendance API is running 🚀"})
+	})
+	// r.GET("/users", controllers.GetAllUsers)
+	// r.POST("/users", controllers.CreateUser)
+	r.POST("/login", controllers.Login)
+	r.POST("/users", controllers.CreateUser)
+	r.POST("/users/v2", controllers.CreateUserV2)
+	r.GET("/test-login", controllers.TestLoginEndpoint)
+	r.POST("/update-password", controllers.UpdateUserPassword)
+
+	// 🔐 Protected Routes
+	protected := r.Group("/")
+	protected.Use(middleware.AuthMiddleware())
+	{
+		protected.GET("/users", controllers.GetAllUsers)
+		// protected.POST("/users", controllers.CreateUser)
+		protected.POST("/schools", controllers.CreateSchool)
+		protected.GET("/schools", controllers.GetSchools)
+		protected.POST("/departments", controllers.CreateDepartment)
+		protected.GET("/departments", controllers.GetDepartments)
+		protected.POST("/terms", controllers.CreateTerm)
+		protected.GET("/terms", controllers.GetTerms)
+		protected.POST("/grades", controllers.CreateGrade)
+		// more protected routes later...
+	}
+
+	// r.Use(cors.Default())
+	r.Run(":8080") // listen on :8080
+}
