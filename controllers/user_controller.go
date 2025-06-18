@@ -13,7 +13,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-
 	"school-attendance/db"
 	"school-attendance/models"
 	"school-attendance/utils"
@@ -52,6 +51,7 @@ func GetAllUsers(c *gin.Context) {
 }
 
 func CreateUser(c *gin.Context) {
+	
 	// Get the raw JSON data
 	jsonData, err := c.GetRawData()
 	if err != nil {
@@ -75,11 +75,7 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	// Validate required fields
-	// if input.ID == "" {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "User ID is required"})
-	// 	return
-	// }
+	
 
 	if input.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})

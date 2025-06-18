@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
-
+	"github.com/google/uuid"
 	"school-attendance/db"
 )
 
@@ -17,15 +17,16 @@ func CreateGrade(c *gin.Context) {
 		Name   string `json:"name"`
 		TermID string `json:"termId"`
 	}
-
+	id := "grade-" + uuid.New().String()
 	var input Input
-	if err := c.ShouldBindJSON(&input); err != nil || input.ID == "" || input.TermID == "" {
+	// if err := c.ShouldBindJSON(&input); err != nil || input.ID == "" || input.TermID == "" {
+	if err := c.ShouldBindJSON(&input); err != nil || input.TermID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid grade input"})
 		return
 	}
 
 	grade := bson.M{
-		"_id":       input.ID,
+		"_id":       id,
 		"name":      input.Name,
 		"termId":    input.TermID,
 		"createdAt": time.Now(),

@@ -9,7 +9,7 @@ import (
 
 	// "go.mongodb.org/mongo-driver/mongo"
 	"school-attendance/db"
-
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -19,15 +19,16 @@ func CreateDepartment(c *gin.Context) {
 		Name     string `json:"name"`
 		SchoolID string `json:"schoolId"`
 	}
-
+	id := "department-" + uuid.New().String()
 	var input Input
-	if err := c.ShouldBindJSON(&input); err != nil || input.ID == "" || input.SchoolID == "" {
+	// if err := c.ShouldBindJSON(&input); err != nil || input.ID == "" || input.SchoolID == "" {
+		if err := c.ShouldBindJSON(&input); err != nil || input.SchoolID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid department input"})
 		return
 	}
 
 	dept := bson.M{
-		"_id":       input.ID,
+		"_id":       id,
 		"name":      input.Name,
 		"schoolId":  input.SchoolID,
 		"createdAt": time.Now(),
@@ -43,7 +44,7 @@ func CreateDepartment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Department created", "id": input.ID})
+	c.JSON(http.StatusCreated, gin.H{"message": "Department created", "id": id})
 }
 
 func GetDepartments(c *gin.Context) {
