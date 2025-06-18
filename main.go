@@ -49,9 +49,16 @@ func main() {
 		protected.POST("/terms", controllers.CreateTerm)
 		protected.GET("/terms", controllers.GetTerms)
 		protected.POST("/grades", controllers.CreateGrade)
+		protected.POST("/classrooms", controllers.CreateClassroom)
+		protected.GET("/classrooms", controllers.GetClassrooms)
+		protected.POST("/students", controllers.CreateStudent)
+		protected.GET("/students", controllers.GetStudents)
+		protected.PUT("/students/:id/classroom", controllers.UpdateStudentClassroom)
+		protected.POST("/attendance", controllers.RecordAttendance)
 		// more protected routes later...
 	}
 
 	// r.Use(cors.Default())
+	r.Group("/")
 	r.Run(":8080") // listen on :8080
 }

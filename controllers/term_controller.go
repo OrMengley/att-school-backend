@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
-
+	"github.com/google/uuid"
 	"school-attendance/db"
 )
 
@@ -17,15 +17,16 @@ func CreateTerm(c *gin.Context) {
 		Year         string `json:"year"`
 		DepartmentID string `json:"departmentId"`
 	}
-
+	id := "term-" + uuid.New().String()
 	var input Input
-	if err := c.ShouldBindJSON(&input); err != nil || input.ID == "" || input.DepartmentID == "" {
+	// if err := c.ShouldBindJSON(&input); err != nil || input.ID == "" || input.DepartmentID == "" {
+	if err := c.ShouldBindJSON(&input); err != nil || input.DepartmentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid term input"})
 		return
 	}
 
 	term := bson.M{
-		"_id":          input.ID,
+		"_id":          id,
 		"year":         input.Year,
 		"departmentId": input.DepartmentID,
 		"createdAt":    time.Now(),
