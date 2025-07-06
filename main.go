@@ -43,7 +43,7 @@ func main() {
 	protected.Use(middleware.AuthMiddleware())
 	{
 		protected.GET("/users", controllers.GetAllUsers)
-		// protected.POST("/users", controllers.CreateUser)
+
 		protected.POST("/schools", controllers.CreateSchool)
 		protected.GET("/schools", controllers.GetSchools)
 		protected.POST("/departments", controllers.CreateDepartment)
