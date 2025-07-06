@@ -35,6 +35,8 @@ func main() {
 	r.POST("/users/v2", controllers.CreateUserV2)
 	r.GET("/test-login", controllers.TestLoginEndpoint)
 	r.POST("/update-password", controllers.UpdateUserPassword)
+	r.GET("/grades", middleware.AuthMiddleware(), controllers.GetGrades)
+	r.PUT("/grades/:id", middleware.AuthMiddleware(), controllers.UpdateGrade)
 
 	// 🔐 Protected Routes
 	protected := r.Group("/")
@@ -46,15 +48,18 @@ func main() {
 		protected.GET("/schools", controllers.GetSchools)
 		protected.POST("/departments", controllers.CreateDepartment)
 		protected.GET("/departments", controllers.GetDepartments)
+		protected.PUT("/departments/:id", controllers.UpdateDepartment)
 		protected.POST("/terms", controllers.CreateTerm)
 		protected.GET("/terms", controllers.GetTerms)
 		protected.POST("/grades", controllers.CreateGrade)
 		protected.POST("/classrooms", controllers.CreateClassroom)
 		protected.GET("/classrooms", controllers.GetClassrooms)
+		protected.PUT("/classrooms/:id", controllers.UpdateClassroom)
 		protected.POST("/students", controllers.CreateStudent)
 		protected.GET("/students", controllers.GetStudents)
 		protected.PUT("/students/:id/classroom", controllers.UpdateStudentClassroom)
 		protected.POST("/attendance", controllers.RecordAttendance)
+
 		// more protected routes later...
 	}
 
