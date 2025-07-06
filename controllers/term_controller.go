@@ -2,13 +2,15 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
-	"github.com/google/uuid"
 	"school-attendance/db"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func CreateTerm(c *gin.Context) {
@@ -36,6 +38,7 @@ func CreateTerm(c *gin.Context) {
 	defer cancel()
 
 	col := db.MongoClient.Database("school_attendance").Collection("terms")
+
 	_, err := col.InsertOne(ctx, term)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Insert failed: " + err.Error()})
@@ -51,7 +54,24 @@ func GetTerms(c *gin.Context) {
 
 	collection := db.MongoClient.Database("school_attendance").Collection("terms")
 
-	cursor, err := collection.Find(ctx, bson.M{})
+	cursor, err := collection.Aggregate(ctx, bson.A{
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "departments",
+				"localField":   "departmentId",
+				"foreignField": "_id",
+				"as":           "department",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$department",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+	fmt.Println(cursor)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch terms"})
 		return
