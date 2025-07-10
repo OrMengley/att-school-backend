@@ -109,17 +109,91 @@ func GetClassrooms(c *gin.Context) {
 	c.JSON(http.StatusOK, results)
 }
 
+// GetClassroom retrieves a single classroom by ID from the database
+// Returns the classroom as JSON or 404 if not found
+func GetClassroom(c *gin.Context) {
+	// Get classroom ID from URL parameter
+	classroomID := c.Param("id")
+	if classroomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Classroom ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+
+	// Use aggregation to get classroom with grade and term information
+	cursor, err := col.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{
+				"_id": classroomID,
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "grades",
+				"localField":   "gradeId",
+				"foreignField": "_id",
+				"as":           "grade",
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "terms",
+				"localField":   "termId",
+				"foreignField": "_id",
+				"as":           "term",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$term",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$grade",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch classroom"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode classroom"})
+		return
+	}
+
+	if len(results) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results[0])
+}
+
 // UpdateClassroom handles updating an existing classroom
 // It accepts a JSON payload with classroom ID and updated fields
 // Returns success message on successful update
+
+// UpdateClassroom handles updating an existing classroom
 func UpdateClassroom(c *gin.Context) {
 	type Input struct {
-		Name    string `json:"name"`
-		GradeID string `json:"gradeId"`
-		TermID  string `json:"termId"`
+		Name       string   `json:"name"`
+		GradeID    string   `json:"gradeId"`
+		TermID     string   `json:"termId"`
+		TeacherIDs []string `json:"teacherIds"` // ✅ Add teacher IDs
 	}
 
-	// Get classroom ID from URL parameter
 	classroomID := c.Param("id")
 	if classroomID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Classroom ID is required"})
@@ -136,7 +210,6 @@ func UpdateClassroom(c *gin.Context) {
 	updateFields := bson.M{
 		"updatedAt": time.Now(),
 	}
-
 	if input.Name != "" {
 		updateFields["name"] = input.Name
 	}
@@ -146,13 +219,14 @@ func UpdateClassroom(c *gin.Context) {
 	if input.TermID != "" {
 		updateFields["termId"] = input.TermID
 	}
+	if input.TeacherIDs != nil {
+		updateFields["teacherIds"] = input.TeacherIDs
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
-
-	// Update the classroom
 	result, err := col.UpdateOne(
 		ctx,
 		bson.M{"_id": classroomID},
@@ -163,7 +237,6 @@ func UpdateClassroom(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update classroom"})
 		return
 	}
-
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
 		return

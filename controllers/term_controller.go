@@ -86,3 +86,61 @@ func GetTerms(c *gin.Context) {
 
 	c.JSON(http.StatusOK, terms)
 }
+
+// GetTerm retrieves a single term by ID from the database
+// Returns the term as JSON or 404 if not found
+func GetTerm(c *gin.Context) {
+	// Get term ID from URL parameter
+	termID := c.Param("id")
+	if termID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("terms")
+
+	// Use aggregation to get term with department information
+	cursor, err := col.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{
+				"_id": termID,
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "departments",
+				"localField":   "departmentId",
+				"foreignField": "_id",
+				"as":           "department",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$department",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch term"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode term"})
+		return
+	}
+
+	if len(results) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Term not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results[0])
+}
