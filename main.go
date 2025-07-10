@@ -28,8 +28,6 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "School Attendance API is running 🚀"})
 	})
-	// r.GET("/users", controllers.GetAllUsers)
-	// r.POST("/users", controllers.CreateUser)
 	r.POST("/login", controllers.Login)
 	r.POST("/users", controllers.CreateUser)
 	r.POST("/users/v2", controllers.CreateUserV2)
@@ -43,7 +41,6 @@ func main() {
 	protected.Use(middleware.AuthMiddleware())
 	{
 		protected.GET("/users", controllers.GetAllUsers)
-
 		protected.POST("/schools", controllers.CreateSchool)
 		protected.GET("/schools", controllers.GetSchools)
 		protected.POST("/departments", controllers.CreateDepartment)
@@ -55,15 +52,22 @@ func main() {
 		protected.POST("/classrooms", controllers.CreateClassroom)
 		protected.GET("/classrooms", controllers.GetClassrooms)
 		protected.PUT("/classrooms/:id", controllers.UpdateClassroom)
-		protected.POST("/students", controllers.CreateStudent)
-		protected.GET("/students", controllers.GetStudents)
 		protected.PUT("/students/:id/classroom", controllers.UpdateStudentClassroom)
 		protected.POST("/attendance", controllers.RecordAttendance)
+		protected.POST("/students", controllers.CreateStudent)
+		protected.GET("/students", controllers.GetStudents)
+		protected.PUT("/students/:id", controllers.UpdateStudent)
 
 		// more protected routes later...
 	}
+	// r.GET("/students", controllers.GetStudents)
+	// For terms
+	r.GET("/terms/:id", controllers.GetTerm)
 
+	// For classrooms
+	r.GET("/classrooms/:id", controllers.GetClassroom)
 	// r.Use(cors.Default())
 	r.Group("/")
 	r.Run(":8080") // listen on :8080
+
 }

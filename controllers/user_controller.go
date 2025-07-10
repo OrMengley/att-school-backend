@@ -26,15 +26,24 @@ func GetAllUsers(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	role := c.GetString("role")
+	// Read current user info from JWT
+	currentRole := c.GetString("role")
+	schoolID := c.GetString("school_id")
+
+	// Read optional ?role query
+	queryRole := c.Query("role")
+
+	// Build filter
 	filter := bson.M{}
-	// if role is admin, filter by their schoolId
-	if role == "admin" {
-		schoolID := c.GetString("school_id")
+	if queryRole != "" {
+		filter["role"] = queryRole
+	}
+
+	// If current user is a school admin, only allow access to their school's users
+	if currentRole == "admin" {
 		filter["schoolId"] = schoolID
 	}
 
-	// cursor, err := collection.Find(ctx, bson.M{})
 	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
 		log.Println("Failed to fetch users:", err)
@@ -52,75 +61,6 @@ func GetAllUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
-// func CreateUser(c *gin.Context) {
-
-// 	// Get the raw JSON data
-// 	jsonData, err := c.GetRawData()
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
-// 		return
-// 	}
-
-// 	// Define a struct to parse the JSON
-// 	type UserInput struct {
-// 		ID       string `json:"id,omitempty"`
-// 		Name     string `json:"name"`
-// 		Email    string `json:"email"`
-// 		Password string `json:"password"`
-// 		Role     string `json:"role"`
-// 		SchoolID string `json:"schoolId,omitempty"`
-// 	}
-
-// 	var input UserInput
-// 	if err := json.Unmarshal(jsonData, &input); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
-// 		return
-// 	}
-
-// 	if input.Password == "" {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
-// 		return
-// 	}
-
-// 	if input.Role == "admin" && input.SchoolID == "" {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "schoolId is required for admin users"})
-// 		return
-// 	}
-// 	// Hash the password
-// 	hashedPassword, err := utils.HashPassword(input.Password)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-// 		return
-// 	}
-
-// 	// Create the user in the database
-// 	user := models.User{
-// 		ID:       primitive.NewObjectID().Hex(),
-// 		Name:     input.Name,
-// 		Email:    input.Email,
-// 		Password: hashedPassword,
-// 		Role:     input.Role,
-// 		SchoolID: input.SchoolID,
-// 	}
-
-// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-// 	defer cancel()
-
-// 	collection := db.MongoClient.Database("school_attendance").Collection("users")
-// 	_, err = collection.InsertOne(ctx, user)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
-// 		return
-// 	}
-
-//		c.JSON(http.StatusCreated, gin.H{
-//			"id":       user.ID,
-//			"name":     user.Name,
-//			"email":    user.Email,
-//			"role":     user.Role,
-//			"schoolId": user.SchoolID,
-//		})
-//	}
 func CreateUser(c *gin.Context) {
 	var user models.User
 
