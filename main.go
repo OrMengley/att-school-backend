@@ -35,6 +35,7 @@ func main() {
 	r.POST("/update-password", controllers.UpdateUserPassword)
 	r.GET("/grades", middleware.AuthMiddleware(), controllers.GetGrades)
 	r.PUT("/grades/:id", middleware.AuthMiddleware(), controllers.UpdateGrade)
+	r.PUT("/classrooms/:id/assign-students", controllers.AssignStudentsToClassroom)
 
 	// 🔐 Protected Routes
 	protected := r.Group("/")
@@ -63,9 +64,11 @@ func main() {
 	// r.GET("/students", controllers.GetStudents)
 	// For terms
 	r.GET("/terms/:id", controllers.GetTerm)
-
+	// r.PUT("/students/:id/classroom", controllers.UpdateStudentClassroom)
 	// For classrooms
 	r.GET("/classrooms/:id", controllers.GetClassroom)
+	// get students by classroom id and term id , at case when want to show classroom detail who student has been study at classroom (display at frontend classroom detail page)
+	r.GET("/students/classroom/:classroomId/term/:termId", controllers.GetStudentsByClassroomAndTerm)
 	// r.Use(cors.Default())
 	r.Group("/")
 	r.Run(":8080") // listen on :8080

@@ -92,15 +92,100 @@ func CreateStudent(c *gin.Context) {
 	})
 }
 
+// func UpdateStudentClassroom(c *gin.Context) {
+// 	id := c.Param("id")
+
+// 	type Input struct {
+// 		ClassroomID string `json:"classroomId"`
+// 		TermID      string `json:"termId"`
+// 	}
+
+// 	var input Input
+// 	if err := c.ShouldBindJSON(&input); err != nil || input.ClassroomID == "" || input.TermID == "" {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid classroom update input"})
+// 		return
+// 	}
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
+
+// 	col := db.MongoClient.Database("school_attendance").Collection("students")
+
+// 	update := bson.M{
+// 		"$set": bson.M{
+// 			"classroomId": input.ClassroomID,
+// 			"termId":      input.TermID,
+// 			"updatedAt":   time.Now(),
+// 		},
+// 		"$push": bson.M{
+// 			"enrollments": bson.M{
+// 				"classroomId": input.ClassroomID,
+// 				"termId":      input.TermID,
+// 			},
+// 		},
+// 	}
+
+// 	_, err := col.UpdateOne(ctx, bson.M{"_id": id}, update)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student classroom"})
+// 		return
+// 	}
+
+//		c.JSON(http.StatusOK, gin.H{"message": "Student classroom updated"})
+//	}
+// func UpdateStudentClassroom(c *gin.Context) {
+// 	id := c.Param("id")
+
+// 	type Input struct {
+// 		ClassroomID string `json:"classroomId"`
+// 		TermID      string `json:"termId"`
+// 	}
+
+// 	var input Input
+// 	if err := c.ShouldBindJSON(&input); err != nil || input.ClassroomID == "" || input.TermID == "" {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid classroom update input"})
+// 		return
+// 	}
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
+
+// 	col := db.MongoClient.Database("school_attendance").Collection("students")
+
+// 	update := bson.M{
+// 		"$set": bson.M{
+// 			"classroomId": input.ClassroomID,
+// 			"termId":      input.TermID,
+// 			"updatedAt":   time.Now(),
+// 		},
+// 		"$addToSet": bson.M{
+// 			"enrollments": bson.M{
+// 				"classroomId": input.ClassroomID,
+// 				"termId":      input.TermID,
+// 			},
+// 		},
+// 	}
+
+// 	_, err := col.UpdateOne(ctx, bson.M{"_id": id}, update)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student classroom"})
+// 		return
+// 	}
+
+//		c.JSON(http.StatusOK, gin.H{"message": "Student classroom updated"})
+//	}
+
+// function to update student classroom and term and add new enrollment
 func UpdateStudentClassroom(c *gin.Context) {
 	id := c.Param("id")
 
 	type Input struct {
 		ClassroomID string `json:"classroomId"`
+		TermID      string `json:"termId"`
 	}
 
 	var input Input
-	if err := c.ShouldBindJSON(&input); err != nil || input.ClassroomID == "" {
+	if err := c.ShouldBindJSON(&input); err != nil || input.ClassroomID == "" || input.TermID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid classroom update input"})
 		return
 	}
@@ -110,9 +195,50 @@ func UpdateStudentClassroom(c *gin.Context) {
 
 	col := db.MongoClient.Database("school_attendance").Collection("students")
 
-	_, err := col.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
-		"$set": bson.M{"classroomId": input.ClassroomID},
-	})
+	// First check if student exists and if classroomId, termId, and enrollments are empty
+	var student bson.M
+	err := col.FindOne(ctx, bson.M{"_id": id}).Decode(&student)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
+		return
+	}
+
+	// Check if classroomId and termId are empty and enrollments is null/empty
+	classroomID, classroomExists := student["classroomId"]
+	termID, termExists := student["termId"]
+	enrollments, enrollmentsExist := student["enrollments"]
+
+	isClassroomEmpty := !classroomExists || classroomID == ""
+	isTermEmpty := !termExists || termID == ""
+	isEnrollmentsEmpty := !enrollmentsExist || enrollments == nil
+
+	update := bson.M{
+		"$set": bson.M{
+			"classroomId": input.ClassroomID,
+			"termId":      input.TermID,
+			"updatedAt":   time.Now(),
+		},
+	}
+
+	// If enrollments is empty or null, initialize it with the new enrollment
+	if isClassroomEmpty && isTermEmpty && isEnrollmentsEmpty {
+		update["$set"].(bson.M)["enrollments"] = []bson.M{
+			{
+				"classroomId": input.ClassroomID,
+				"termId":      input.TermID,
+			},
+		}
+	} else {
+		// Otherwise add to existing enrollments
+		update["$addToSet"] = bson.M{
+			"enrollments": bson.M{
+				"classroomId": input.ClassroomID,
+				"termId":      input.TermID,
+			},
+		}
+	}
+
+	_, err = col.UpdateOne(ctx, bson.M{"_id": id}, update)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student classroom"})
 		return
@@ -287,4 +413,43 @@ func GetStudents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, students)
+}
+
+// get students by classroom id , at case when want to show classroom detail who student has been study at classroom
+func GetStudentsByClassroomAndTerm(c *gin.Context) {
+	classroomID := c.Param("classroomId")
+	termID := c.Param("termId")
+
+	if classroomID == "" || termID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing classroomId or termId"})
+		return
+	}
+
+	col := db.MongoClient.Database("school_attendance").Collection("students")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{
+		"enrollments": bson.M{
+			"$elemMatch": bson.M{
+				"classroomId": classroomID,
+				"termId":      termID,
+			},
+		},
+	}
+
+	cursor, err := col.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch students"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode students"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }

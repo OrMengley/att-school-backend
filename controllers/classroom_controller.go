@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"school-attendance/db"
+	"school-attendance/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid" // ✅ new import
@@ -17,6 +18,7 @@ import (
 // It accepts a JSON payload with name and gradeId
 // Returns the newly created classroom ID on success
 func CreateClassroom(c *gin.Context) {
+
 	type Input struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
@@ -187,29 +189,23 @@ func GetClassroom(c *gin.Context) {
 
 // UpdateClassroom handles updating an existing classroom
 func UpdateClassroom(c *gin.Context) {
-	type Input struct {
-		Name       string   `json:"name"`
-		GradeID    string   `json:"gradeId"`
-		TermID     string   `json:"termId"`
-		TeacherIDs []string `json:"teacherIds"` // ✅ Add teacher IDs
-	}
-
 	classroomID := c.Param("id")
 	if classroomID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Classroom ID is required"})
 		return
 	}
+	// Log the request for debugging
+	fmt.Printf("Updating classroom with ID: %s\n", classroomID)
 
-	var input Input
+	var input models.Classroom
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid classroom input"})
+		fmt.Printf("Invalid input error: %v\n", err)
 		return
 	}
 
 	// Build update fields
-	updateFields := bson.M{
-		"updatedAt": time.Now(),
-	}
+	updateFields := bson.M{}
 	if input.Name != "" {
 		updateFields["name"] = input.Name
 	}
@@ -219,14 +215,36 @@ func UpdateClassroom(c *gin.Context) {
 	if input.TermID != "" {
 		updateFields["termId"] = input.TermID
 	}
-	if input.TeacherIDs != nil {
-		updateFields["teacherIds"] = input.TeacherIDs
+	// if input.StudentIDs != nil {
+	// 	updateFields["studentIds"] = input.StudentIDs
+	// }
+	if input.Sessions != nil {
+		updateFields["sessions"] = input.Sessions
 	}
+
+	// Only update if there are fields to update
+	if len(updateFields) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid fields to update"})
+		return
+	}
+
+	fmt.Printf("Update fields: %+v\n", updateFields)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+
+	// First check if the classroom exists
+	var existingClassroom bson.M
+	err := col.FindOne(ctx, bson.M{"_id": classroomID}).Decode(&existingClassroom)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
+		fmt.Printf("Classroom not found: %s, error: %v\n", classroomID, err)
+		return
+	}
+
+	// Proceed with update
 	result, err := col.UpdateOne(
 		ctx,
 		bson.M{"_id": classroomID},
@@ -235,12 +253,58 @@ func UpdateClassroom(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update classroom"})
+		fmt.Printf("Update error: %v\n", err)
 		return
 	}
+
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Classroom updated successfully"})
+}
+
+func AssignStudentsToClassroom(c *gin.Context) {
+	type Input struct {
+		StudentIDs  []string `json:"studentIds"`
+		TermID      string   `json:"termId"`
+		ClassroomID string   `json:"classroomId"`
+	}
+
+	var input Input
+	if err := c.ShouldBindJSON(&input); err != nil || input.TermID == "" || input.ClassroomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("students")
+
+	for _, studentID := range input.StudentIDs {
+		filter := bson.M{"_id": studentID}
+
+		update := bson.M{
+			"$set": bson.M{
+				"termId":      input.TermID,
+				"classroomId": input.ClassroomID,
+			},
+			"$addToSet": bson.M{
+				"enrollments": bson.M{
+					"termId":      input.TermID,
+					"classroomId": input.ClassroomID,
+				},
+			},
+		}
+
+		_, err := col.UpdateOne(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to update student %s", studentID)})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Students assigned successfully"})
 }
