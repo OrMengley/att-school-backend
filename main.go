@@ -10,21 +10,19 @@ import (
 )
 
 func main() {
-
-	db.ConnectMongo() // connect to MongoDB
+	db.ConnectMongo()
 	r := gin.Default()
 
-	// ✅ Enable CORS for frontend requests
-	// r.Use(cors.Default())
-
+	// CORS
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	}))
 
+	// Public routes
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "School Attendance API is running 🚀"})
 	})
@@ -33,11 +31,19 @@ func main() {
 	r.POST("/users/v2", controllers.CreateUserV2)
 	r.GET("/test-login", controllers.TestLoginEndpoint)
 	r.POST("/update-password", controllers.UpdateUserPassword)
-	r.GET("/grades", middleware.AuthMiddleware(), controllers.GetGrades)
-	r.PUT("/grades/:id", middleware.AuthMiddleware(), controllers.UpdateGrade)
-	r.PUT("/classrooms/:id/assign-students", controllers.AssignStudentsToClassroom)
 
-	// 🔐 Protected Routes
+	r.GET("/terms/:id", controllers.GetTerm)
+	r.GET("/classrooms/:id", controllers.GetClassroom)
+	r.GET("/students/classroom/:classroomId/term/:termId", controllers.GetStudentsByClassroomAndTerm)
+	r.POST("/classrooms/:id/sessions", controllers.AddSessionToClassroom)
+	r.GET("/classrooms/:id/sessions", controllers.GetSessionsForClassroom)
+	r.DELETE("/classrooms/:id/sessions/:sessionId", controllers.RemoveSessionFromClassroom)
+	r.POST("/attendance/check", controllers.CheckInOrOutStudent)
+	r.GET("/students/classroom/:classroomId", controllers.GetStudentsByClassroom)
+	// r.GET("/schools/:id", controllers.GetSchool) is use to fetch only school infor for teacher
+	r.GET("/schools/:id", controllers.GetSchool)
+
+	// Protected routes
 	protected := r.Group("/")
 	protected.Use(middleware.AuthMiddleware())
 	{
@@ -50,27 +56,18 @@ func main() {
 		protected.POST("/terms", controllers.CreateTerm)
 		protected.GET("/terms", controllers.GetTerms)
 		protected.POST("/grades", controllers.CreateGrade)
+		protected.GET("/grades", controllers.GetGrades)
+		protected.PUT("/grades/:id", controllers.UpdateGrade)
 		protected.POST("/classrooms", controllers.CreateClassroom)
 		protected.GET("/classrooms", controllers.GetClassrooms)
 		protected.PUT("/classrooms/:id", controllers.UpdateClassroom)
+		protected.PUT("/classrooms/:id/assign-teacher", controllers.AssignTeacherToClassroom)
+		protected.PUT("/classrooms/:id/assign-students", controllers.AssignStudentsToClassroom)
 		protected.PUT("/students/:id/classroom", controllers.UpdateStudentClassroom)
-		protected.POST("/attendance", controllers.RecordAttendance)
 		protected.POST("/students", controllers.CreateStudent)
 		protected.GET("/students", controllers.GetStudents)
 		protected.PUT("/students/:id", controllers.UpdateStudent)
-
-		// more protected routes later...
 	}
-	// r.GET("/students", controllers.GetStudents)
-	// For terms
-	r.GET("/terms/:id", controllers.GetTerm)
-	// r.PUT("/students/:id/classroom", controllers.UpdateStudentClassroom)
-	// For classrooms
-	r.GET("/classrooms/:id", controllers.GetClassroom)
-	// get students by classroom id and term id , at case when want to show classroom detail who student has been study at classroom (display at frontend classroom detail page)
-	r.GET("/students/classroom/:classroomId/term/:termId", controllers.GetStudentsByClassroomAndTerm)
-	// r.Use(cors.Default())
-	r.Group("/")
-	r.Run(":8080") // listen on :8080
 
+	r.Run(":8080")
 }

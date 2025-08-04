@@ -453,3 +453,36 @@ func GetStudentsByClassroomAndTerm(c *gin.Context) {
 
 	c.JSON(http.StatusOK, results)
 }
+
+// GetStudentsByClassroom fetches students by classroomId only (no termId)
+func GetStudentsByClassroom(c *gin.Context) {
+	classroomID := c.Param("classroomId")
+
+	if classroomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing classroomId"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("students")
+
+	// Find students where classroomId matches
+	filter := bson.M{"classroomId": classroomID}
+
+	cursor, err := col.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch students"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var students []bson.M
+	if err := cursor.All(ctx, &students); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode students"})
+		return
+	}
+
+	c.JSON(http.StatusOK, students)
+}

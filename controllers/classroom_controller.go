@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"school-attendance/db"
@@ -12,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid" // ✅ new import
 	"go.mongodb.org/mongo-driver/bson"
+
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // CreateClassroom handles the creation of a new classroom
@@ -206,6 +209,7 @@ func UpdateClassroom(c *gin.Context) {
 
 	// Build update fields
 	updateFields := bson.M{}
+
 	if input.Name != "" {
 		updateFields["name"] = input.Name
 	}
@@ -219,7 +223,20 @@ func UpdateClassroom(c *gin.Context) {
 	// 	updateFields["studentIds"] = input.StudentIDs
 	// }
 	if input.Sessions != nil {
-		updateFields["sessions"] = input.Sessions
+		var sessions []models.Session
+		for _, session := range input.Sessions {
+			sessions = append(sessions, models.Session{
+				ID:               uuid.New().String(),
+				SubjectName:      session.SubjectName,
+				TeacherID:        session.TeacherID,
+				SessionDay:       session.SessionDay,
+				SessionStartHour: session.SessionStartHour,
+				SessionStartMin:  session.SessionStartMin,
+				SessionEndHour:   session.SessionEndHour,
+				SessionEndMin:    session.SessionEndMin,
+			})
+		}
+		updateFields["sessions"] = sessions
 	}
 
 	// Only update if there are fields to update
@@ -263,6 +280,7 @@ func UpdateClassroom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Classroom updated successfully"})
+
 }
 
 func AssignStudentsToClassroom(c *gin.Context) {
@@ -307,4 +325,242 @@ func AssignStudentsToClassroom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Students assigned successfully"})
+}
+
+// AssignTeacherToClassroom assigns a teacher to a classroom by updating the teacher's classroomIds array
+func AssignTeacherToClassroom(c *gin.Context) {
+	type Input struct {
+		TeacherID   string `json:"teacherId"`
+		ClassroomID string `json:"classroomId"`
+	}
+
+	var input Input
+	if err := c.ShouldBindJSON(&input); err != nil || input.TeacherID == "" || input.ClassroomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("users")
+
+	filter := bson.M{"_id": input.TeacherID, "role": "teacher"}
+	update := bson.M{
+		"$addToSet": bson.M{
+			"classroomIds": input.ClassroomID,
+		},
+	}
+
+	result, err := col.UpdateOne(ctx, filter, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign teacher to classroom"})
+		return
+	}
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Teacher not found or not a teacher role"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Teacher assigned to classroom successfully"})
+}
+
+// AddSessionToClassroom adds a single session to an existing classroom
+// AddSessionToClassroom adds one or more sessions to an existing classroom
+func AddSessionToClassroom(c *gin.Context) {
+	classroomID := c.Param("id")
+	if classroomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Classroom ID is required"})
+		return
+	}
+
+	// Input: array of sessions
+	var input []struct {
+		SubjectName      string `json:"subjectName"`
+		TeacherID        string `json:"teacherId"`
+		SessionDay       string `json:"sessionDay"`
+		SessionStartHour string `json:"sessionStartHour"`
+		SessionStartMin  string `json:"sessionStartMin"`
+		SessionEndHour   string `json:"sessionEndHour"`
+		SessionEndMin    string `json:"sessionEndMin"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session input"})
+		return
+	}
+
+	if len(input) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No sessions provided"})
+		return
+	}
+
+	// Convert to []models.Session with generated UUID
+	var newSessions []models.Session
+	for _, s := range input {
+		newSessions = append(newSessions, models.Session{
+			ID:               uuid.New().String(),
+			SubjectName:      s.SubjectName,
+			TeacherID:        s.TeacherID,
+			SessionDay:       s.SessionDay,
+			SessionStartHour: s.SessionStartHour,
+			SessionStartMin:  s.SessionStartMin,
+			SessionEndHour:   s.SessionEndHour,
+			SessionEndMin:    s.SessionEndMin,
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+	// 1. Check for required fields and time correctness
+	for _, s := range newSessions {
+		if s.SubjectName == "" || s.TeacherID == "" || s.SessionDay == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required fields"})
+			return
+		}
+
+		startH, _ := strconv.Atoi(s.SessionStartHour)
+		startM, _ := strconv.Atoi(s.SessionStartMin)
+		endH, _ := strconv.Atoi(s.SessionEndHour)
+		endM, _ := strconv.Atoi(s.SessionEndMin)
+
+		start := startH*60 + startM
+		end := endH*60 + endM
+		if start >= end {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Start time must be before end time"})
+			return
+		}
+	}
+
+	// 2. Fetch existing sessions for this classroom
+	var existing struct {
+		Sessions []models.Session `bson:"sessions"`
+	}
+	err := col.FindOne(ctx, bson.M{"_id": classroomID}).Decode(&existing)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
+		return
+	}
+
+	// 3. Validate against overlapping sessions for the same day
+	mustParse := func(hh, mm string) int {
+		h, _ := strconv.Atoi(hh)
+		m, _ := strconv.Atoi(mm)
+		return h*60 + m
+	}
+
+	for _, ns := range newSessions {
+		nsStart := mustParse(ns.SessionStartHour, ns.SessionStartMin)
+		nsEnd := mustParse(ns.SessionEndHour, ns.SessionEndMin)
+
+		for _, es := range existing.Sessions {
+			if es.SessionDay == ns.SessionDay {
+				esStart := mustParse(es.SessionStartHour, es.SessionStartMin)
+				esEnd := mustParse(es.SessionEndHour, es.SessionEndMin)
+				// Check overlap
+				if nsStart < esEnd && nsEnd > esStart {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"error": fmt.Sprintf("Session conflict on %s with %s", ns.SessionDay, es.SubjectName),
+					})
+					return
+				}
+			}
+		}
+	}
+
+	// ------------------- END VALIDATION -------------------
+
+	// Use $push with $each to append multiple sessions
+	update := bson.M{
+		"$push": bson.M{
+			"sessions": bson.M{
+				"$each": newSessions,
+			},
+		},
+	}
+
+	result, err := col.UpdateOne(ctx, bson.M{"_id": classroomID}, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add sessions"})
+		return
+	}
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Sessions added successfully",
+		"sessions": newSessions,
+	})
+}
+
+// GetSessionsForClassroom retrieves only the sessions for a given classroom
+func GetSessionsForClassroom(c *gin.Context) {
+	classroomID := c.Param("id")
+	if classroomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Classroom ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+
+	// Projection to only include sessions field
+	var result struct {
+		Sessions []models.Session `bson:"sessions" json:"sessions"`
+	}
+
+	err := col.FindOne(
+		ctx,
+		bson.M{"_id": classroomID},
+		options.FindOne().SetProjection(bson.M{"sessions": 1, "_id": 0}),
+	).Decode(&result)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, result.Sessions)
+}
+
+// RemoveSessionFromClassroom removes a session by its sessionId from a classroom
+func RemoveSessionFromClassroom(c *gin.Context) {
+	classroomID := c.Param("id")
+	sessionID := c.Param("sessionId")
+
+	if classroomID == "" || sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Classroom ID and Session ID are required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+
+	// Use $pull to remove the session with this ID
+	update := bson.M{
+		"$pull": bson.M{
+			"sessions": bson.M{"_id": sessionID},
+		},
+	}
+
+	result, err := col.UpdateOne(ctx, bson.M{"_id": classroomID}, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove session"})
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Session removed successfully"})
 }
