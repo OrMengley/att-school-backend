@@ -2,25 +2,29 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
 	"school-attendance/db"
+	"school-attendance/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func RecordAttendance(c *gin.Context) {
-	type Input struct {
-		StudentID string `json:"studentId"`
-		Status    string `json:"status"` // "checkin" or "checkout"
+// CheckInOrOutStudent marks a student as checked in or out
+func CheckInOrOutStudent(c *gin.Context) {
+	var input struct {
+		StudentID   string `json:"studentId"`
+		ClassroomID string `json:"classroomId"`
+		TeacherID   string `json:"teacherId"`
+		Status      string `json:"status"` // "checkin" or "checkout"
 	}
 
-	var input Input
-	if err := c.ShouldBindJSON(&input); err != nil || input.StudentID == "" || (input.Status != "checkin" && input.Status != "checkout") {
+	if err := c.ShouldBindJSON(&input); err != nil ||
+		input.StudentID == "" || input.ClassroomID == "" || input.TeacherID == "" ||
+		(input.Status != "checkin" && input.Status != "checkout") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
@@ -28,36 +32,57 @@ func RecordAttendance(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 1️⃣ Fetch student to get classroomId and parentPhone
-	studentsCol := db.MongoClient.Database("school_attendance").Collection("students")
-	var student bson.M
-	err := studentsCol.FindOne(ctx, bson.M{"_id": input.StudentID}).Decode(&student)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
-		return
-	}
+	col := db.MongoClient.Database("school_attendance").Collection("attendance")
 
-	// 2️⃣ Prepare attendance entry
-	id := "attendance-" + uuid.New().String()
-	attendance := bson.M{
-		"_id":         id,
+	today := time.Now().Format("2006-01-02")
+
+	// Check if an attendance record exists for this student/classroom/today
+	filter := bson.M{
 		"studentId":   input.StudentID,
-		"classroomId": student["classroomId"],
-		"status":      input.Status,
-		"timestamp":   time.Now(),
+		"classroomId": input.ClassroomID,
+		"date":        today,
 	}
 
-	// 3️⃣ Insert attendance
-	attCol := db.MongoClient.Database("school_attendance").Collection("attendance")
-	_, err = attCol.InsertOne(ctx, attendance)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record attendance"})
+	var existing models.Attendance
+	err := col.FindOne(ctx, filter).Decode(&existing)
+
+	if err == nil {
+		// Update the existing record's status and time
+		update := bson.M{
+			"$set": bson.M{
+				"status":    input.Status,
+				"time":      time.Now(),
+				"teacherId": input.TeacherID,
+			},
+		}
+		_, _ = col.UpdateOne(ctx, filter, update)
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Attendance updated",
+			"status":  input.Status,
+		})
 		return
 	}
 
-	// 4️⃣ Log notification
-	parentPhone := student["parentPhone"]
-	fmt.Printf("📢 Notifying parent %s: student %s has %s\n", parentPhone, student["name"], input.Status)
+	// Otherwise, insert a new attendance record
+	attendance := models.Attendance{
+		ID:          uuid.New().String(),
+		StudentID:   input.StudentID,
+		ClassroomID: input.ClassroomID,
+		Date:        today,
+		Status:      input.Status,
+		Time:        time.Now(),
+		TeacherID:   input.TeacherID,
+	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Attendance recorded", "id": id})
+	_, errInsert := col.InsertOne(ctx, attendance)
+	if errInsert != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save attendance"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Attendance marked",
+		"status":  input.Status,
+	})
 }
