@@ -13,7 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-// CheckInOrOutStudent marks a student as checked in or out
+// CheckInOrOutStudent handles check-in or check-out for a student
 func CheckInOrOutStudent(c *gin.Context) {
 	var input struct {
 		StudentID   string `json:"studentId"`
@@ -33,10 +33,8 @@ func CheckInOrOutStudent(c *gin.Context) {
 	defer cancel()
 
 	col := db.MongoClient.Database("school_attendance").Collection("attendance")
-
 	today := time.Now().Format("2006-01-02")
 
-	// Check if an attendance record exists for this student/classroom/today
 	filter := bson.M{
 		"studentId":   input.StudentID,
 		"classroomId": input.ClassroomID,
@@ -46,16 +44,34 @@ func CheckInOrOutStudent(c *gin.Context) {
 	var existing models.Attendance
 	err := col.FindOne(ctx, filter).Decode(&existing)
 
+	update := bson.M{}
+	now := time.Now()
+
 	if err == nil {
-		// Update the existing record's status and time
-		update := bson.M{
-			"$set": bson.M{
-				"status":    input.Status,
-				"time":      time.Now(),
-				"teacherId": input.TeacherID,
-			},
+		// Record already exists → Update status
+		if input.Status == "checkin" {
+			update = bson.M{
+				"$set": bson.M{
+					"checkinTime": now,
+					"teacherId":   input.TeacherID,
+					"status":      "checkin",
+				},
+			}
+		} else {
+			update = bson.M{
+				"$set": bson.M{
+					"checkoutTime": now,
+					"teacherId":    input.TeacherID,
+					"status":       "checkout",
+				},
+			}
 		}
-		_, _ = col.UpdateOne(ctx, filter, update)
+
+		_, err = col.UpdateOne(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update attendance"})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Attendance updated",
@@ -64,25 +80,30 @@ func CheckInOrOutStudent(c *gin.Context) {
 		return
 	}
 
-	// Otherwise, insert a new attendance record
-	attendance := models.Attendance{
-		ID:          uuid.New().String(),
+	// No existing record → Create new check-in or check-out
+	newAttendance := models.Attendance{
+		ID:          "att-" + uuid.New().String(),
 		StudentID:   input.StudentID,
 		ClassroomID: input.ClassroomID,
+		TeacherID:   input.TeacherID,
 		Date:        today,
 		Status:      input.Status,
-		Time:        time.Now(),
-		TeacherID:   input.TeacherID,
 	}
 
-	_, errInsert := col.InsertOne(ctx, attendance)
-	if errInsert != nil {
+	if input.Status == "checkin" {
+		newAttendance.CheckinTime = now
+	} else {
+		newAttendance.CheckoutTime = now
+	}
+
+	_, err = col.InsertOne(ctx, newAttendance)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save attendance"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Attendance marked",
+		"message": "Attendance recorded",
 		"status":  input.Status,
 	})
 }
