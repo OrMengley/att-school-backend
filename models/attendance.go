@@ -7,8 +7,9 @@ type Attendance struct {
 	StudentID    string    `bson:"studentId" json:"studentId"`
 	ClassroomID  string    `bson:"classroomId" json:"classroomId"`
 	TeacherID    string    `bson:"teacherId" json:"teacherId"`
-	Date         string    `bson:"date" json:"date"`     // YYYY-MM-DD
-	Status       string    `bson:"status" json:"status"` // "checkin", "checkout"
+	SessionID    string    `bson:"sessionId" json:"sessionId"` // ✅ New field
+	Date         string    `bson:"date" json:"date"`           // YYYY-MM-DD
+	Status       string    `bson:"status" json:"status"`       // "checkin", "checkout"
 	CheckinTime  time.Time `bson:"checkinTime,omitempty" json:"checkinTime,omitempty"`
 	CheckoutTime time.Time `bson:"checkoutTime,omitempty" json:"checkoutTime,omitempty"`
 }
