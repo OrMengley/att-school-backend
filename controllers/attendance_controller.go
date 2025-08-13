@@ -19,6 +19,7 @@ func CheckInOrOutStudent(c *gin.Context) {
 		StudentID   string `json:"studentId"`
 		ClassroomID string `json:"classroomId"`
 		TeacherID   string `json:"teacherId"`
+		SessionID   string `json:"sessionId"`
 		Status      string `json:"status"` // "checkin" or "checkout"
 	}
 
@@ -39,6 +40,7 @@ func CheckInOrOutStudent(c *gin.Context) {
 		"studentId":   input.StudentID,
 		"classroomId": input.ClassroomID,
 		"date":        today,
+		"sessionId":   input.SessionID,
 	}
 
 	var existing models.Attendance
@@ -106,4 +108,44 @@ func CheckInOrOutStudent(c *gin.Context) {
 		"message": "Attendance recorded",
 		"status":  input.Status,
 	})
+}
+
+// GetAttendanceBySession returns all attendance records for a given session
+func GetAttendanceBySession(c *gin.Context) {
+	sessionId := c.Param("sessionId")
+	if sessionId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing sessionId"})
+		return
+	}
+
+	collection := db.MongoClient.Database("school_attendance").Collection("attendance")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Filter by sessionId
+	filter := bson.M{"sessionId": sessionId}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch attendance"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var attendances []models.Attendance
+	if err := cursor.All(ctx, &attendances); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode attendance"})
+		return
+	}
+
+	// Optionally trim the response if only ID and status is needed:
+	trimmed := make([]gin.H, 0, len(attendances))
+	for _, a := range attendances {
+		trimmed = append(trimmed, gin.H{
+			"studentId": a.StudentID,
+			"status":    a.Status,
+		})
+	}
+
+	c.JSON(http.StatusOK, trimmed)
 }

@@ -42,7 +42,7 @@ func main() {
 	r.GET("/students/classroom/:classroomId", controllers.GetStudentsByClassroom)
 	// r.GET("/schools/:id", controllers.GetSchool) is use to fetch only school infor for teacher
 	r.GET("/schools/:id", controllers.GetSchool)
-
+	r.GET("/attendance/session/:sessionId", controllers.GetAttendanceBySession)
 	// Protected routes
 	protected := r.Group("/")
 	protected.Use(middleware.AuthMiddleware())
@@ -67,6 +67,14 @@ func main() {
 		protected.POST("/students", controllers.CreateStudent)
 		protected.GET("/students", controllers.GetStudents)
 		protected.PUT("/students/:id", controllers.UpdateStudent)
+
+		protected.GET("/parents/me/children", controllers.GetMyChildren)
+		protected.GET("/parents/me/children/:studentId/attendance", controllers.GetMyChildAttendance)
+		// protected.GET("/parents/:parentId/children", controllers.GetChildrenForParent)
+		protected.GET("/attendance/student/:studentId", controllers.GetAttendanceByStudent)
+		protected.PUT("/users/:id/subscriptions", controllers.UpdateParentSubscriptions)
+		protected.PUT("/users/:id", controllers.AdminUpdateUser)
+		protected.PUT("/users/:id/password", controllers.AdminSetUserPassword)
 	}
 
 	r.Run(":8080")
