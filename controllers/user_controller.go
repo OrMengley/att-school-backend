@@ -22,7 +22,7 @@ import (
 // sanitizeUser removes sensitive fields before sending to client
 func sanitizeUser(u models.User) gin.H {
 	return gin.H{
-		"id":       u.ID,
+		"_id":      u.ID,
 		"name":     u.Name,
 		"email":    u.Email,
 		"role":     u.Role,
@@ -363,7 +363,7 @@ func AdminSetUserPassword(c *gin.Context) {
 		return
 	}
 
-	userID := c.Param("id")
+	userID := c.Param("_id")
 	if userID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing user id"})
 		return
@@ -489,7 +489,7 @@ func CreateSchool(c *gin.Context) {
 	}
 
 	type SchoolInput struct {
-		ID      string `json:"id"`
+		ID      string `json:"_id"`
 		Name    string `json:"name"`
 		Address string `json:"address"`
 	}
@@ -626,7 +626,7 @@ func CreateUserV2(c *gin.Context) {
 
 	// Define a struct to parse the JSON
 	type UserInput struct {
-		ID       string `json:"id"`
+		ID       string `json:"_id"`
 		Name     string `json:"name"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -691,7 +691,7 @@ func CreateUserV2(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"id":       user.ID,
+		"_id":      user.ID,
 		"name":     user.Name,
 		"email":    user.Email,
 		"role":     user.Role,
@@ -702,7 +702,7 @@ func CreateUserV2(c *gin.Context) {
 // UpdateParentSubscriptions updates the subscribedStudents for a parent user.
 // Allowed by: super_admin, admin (school admin). Admin can only edit users in their own school.
 func UpdateParentSubscriptions(c *gin.Context) {
-	parentID := c.Param("id")
+	parentID := c.Param("_id")
 	if parentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing user id"})
 		return

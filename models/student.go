@@ -1,12 +1,12 @@
 package models
 
 type Enrollment struct {
-	TermID      string `bson:"termId" json:"termId"`
-	ClassroomID string `bson:"classroomId" json:"classroomId"`
+	TermID      string `bson:"term_id" json:"term_id"`
+	ClassroomID string `bson:"classroom_id" json:"classroom_id"`
 }
 
 type Student struct {
-	ID          string       `bson:"_id" json:"id"`
+	ID          string       `bson:"_id" json:"_id"`
 	FirstName   string       `bson:"firstName,omitempty" json:"firstName,omitempty"` // optional
 	LastName    string       `bson:"lastName,omitempty" json:"lastName,omitempty"`   // optional
 	Name        string       `bson:"name" json:"name"`
@@ -18,6 +18,6 @@ type Student struct {
 	Enrollments []Enrollment `bson:"enrollments" json:"enrollments"`                   // each term & class
 	Status      string       `bson:"status" json:"status"`
 	CreatedAt   string       `bson:"createdAt" json:"createdAt"`
-	ClassroomID string       `bson:"classroomId,omitempty" json:"classroomId,omitempty"`
-	TermID      string       `bson:"termId,omitempty" json:"termId,omitempty"`
+	ClassroomID string       `bson:"classroom_id,omitempty" json:"classroom_id,omitempty"`
+	TermID      string       `bson:"term_id,omitempty" json:"term_id,omitempty"`
 }

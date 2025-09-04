@@ -1,3 +1,5 @@
+//
+
 package middleware
 
 import (
@@ -19,19 +21,31 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return []byte("SECRET_KEY"), nil // Match with key used in login
+			return []byte("SECRET_KEY"), nil // Must match your login signing key
 		})
 
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}
-		claims := token.Claims.(jwt.MapClaims)
-		c.Set("user_id", claims["user_id"])
-		c.Set("role", claims["role"])
-		if schoolID, ok := claims["school_id"].(string); ok {
-			c.Set("school_id", schoolID)
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			return
 		}
+
+		// Align context keys with what your controllers expect
+		if uid, ok := claims["user_id"].(string); ok {
+			c.Set("user_id", uid)
+		}
+		if role, ok := claims["role"].(string); ok {
+			c.Set("role", role)
+		}
+		if sid, ok := claims["school_id"].(string); ok {
+			c.Set("school_id", sid)
+		}
+
 		c.Next()
 	}
 }

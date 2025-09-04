@@ -417,11 +417,11 @@ func GetStudents(c *gin.Context) {
 
 // get students by classroom id , at case when want to show classroom detail who student has been study at classroom
 func GetStudentsByClassroomAndTerm(c *gin.Context) {
-	classroomID := c.Param("classroomId")
-	termID := c.Param("termId")
+	classroom_id := c.Param("classroom_id")
+	term_id := c.Param("term_id")
 
-	if classroomID == "" || termID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing classroomId or termId"})
+	if classroom_id == "" || term_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing classroomid or term_id"})
 		return
 	}
 
@@ -432,8 +432,8 @@ func GetStudentsByClassroomAndTerm(c *gin.Context) {
 	filter := bson.M{
 		"enrollments": bson.M{
 			"$elemMatch": bson.M{
-				"classroomId": classroomID,
-				"termId":      termID,
+				"classroom_id": classroom_id,
+				"term_id":      term_id,
 			},
 		},
 	}

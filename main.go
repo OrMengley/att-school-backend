@@ -12,7 +12,6 @@ import (
 func main() {
 	db.ConnectMongo()
 	r := gin.Default()
-
 	// CORS
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -34,15 +33,15 @@ func main() {
 
 	r.GET("/terms/:id", controllers.GetTerm)
 	r.GET("/classrooms/:id", controllers.GetClassroom)
-	r.GET("/students/classroom/:classroomId/term/:termId", controllers.GetStudentsByClassroomAndTerm)
+	r.GET("/students/classroom/:classroom_id/term/:term_id", controllers.GetStudentsByClassroomAndTerm)
 	r.POST("/classrooms/:id/sessions", controllers.AddSessionToClassroom)
 	r.GET("/classrooms/:id/sessions", controllers.GetSessionsForClassroom)
-	r.DELETE("/classrooms/:id/sessions/:sessionId", controllers.RemoveSessionFromClassroom)
+	r.DELETE("/classrooms/:id/sessions/:session_id", controllers.RemoveSessionFromClassroom)
 	r.POST("/attendance/check", controllers.CheckInOrOutStudent)
-	r.GET("/students/classroom/:classroomId", controllers.GetStudentsByClassroom)
+	r.GET("/students/classroom/:classroom_id", controllers.GetStudentsByClassroom)
 	// r.GET("/schools/:id", controllers.GetSchool) is use to fetch only school infor for teacher
 	r.GET("/schools/:id", controllers.GetSchool)
-	r.GET("/attendance/session/:sessionId", controllers.GetAttendanceBySession)
+	r.GET("/attendance/session/:session_id", controllers.GetAttendanceBySession)
 	// Protected routes
 	protected := r.Group("/")
 	protected.Use(middleware.AuthMiddleware())
@@ -67,14 +66,20 @@ func main() {
 		protected.POST("/students", controllers.CreateStudent)
 		protected.GET("/students", controllers.GetStudents)
 		protected.PUT("/students/:id", controllers.UpdateStudent)
-
 		protected.GET("/parents/me/children", controllers.GetMyChildren)
-		protected.GET("/parents/me/children/:studentId/attendance", controllers.GetMyChildAttendance)
+		protected.GET("/parents/me/children/:student_id/attendance", controllers.GetMyChildAttendance)
 		// protected.GET("/parents/:parentId/children", controllers.GetChildrenForParent)
-		protected.GET("/attendance/student/:studentId", controllers.GetAttendanceByStudent)
+
+		protected.GET("/attendance/student/:student_id", controllers.GetAttendanceByStudent)
+
 		protected.PUT("/users/:id/subscriptions", controllers.UpdateParentSubscriptions)
 		protected.PUT("/users/:id", controllers.AdminUpdateUser)
 		protected.PUT("/users/:id/password", controllers.AdminSetUserPassword)
+		// Teacher report endpoints
+		protected.GET("/attendance/by-classroom/:classroom_id", controllers.AttendanceByClassroom) // ?date=YYYY-MM-DD or ?from=&to=
+		// protected.GET("/attendance/student/:studentId", controllers.AttendanceByStudent)          // ?from=&to=
+		protected.GET("/attendance/range", controllers.AttendanceRangeForTeacher) // ?from=&to=
+		protected.GET("/attendance/today", controllers.AttendanceTodayForTeacher) // today only
 	}
 
 	r.Run(":8080")
