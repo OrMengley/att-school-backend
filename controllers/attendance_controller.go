@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -16,18 +17,24 @@ import (
 // CheckInOrOutStudent handles check-in or check-out for a student
 func CheckInOrOutStudent(c *gin.Context) {
 	var input struct {
-		StudentID   string `json:"studentId"`
-		ClassroomID string `json:"classroomId"`
-		TeacherID   string `json:"teacherId"`
-		SessionID   string `json:"sessionId"`
+		StudentID   string `json:"student_id"`
+		ClassroomID string `json:"classroom_id"`
+		TeacherID   string `json:"teacher_id"`
+		SessionID   string `json:"session_id"`
 		Status      string `json:"status"` // "checkin" or "checkout"
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil ||
-		input.StudentID == "" || input.ClassroomID == "" || input.TeacherID == "" ||
-		(input.Status != "checkin" && input.Status != "checkout") {
+	if err := c.ShouldBindJSON(&input); err != nil {
+
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
+	}
+	if input.StudentID == "" || input.ClassroomID == "" || input.TeacherID == "" ||
+		(input.Status != "checkin" && input.Status != "checkout") {
+		fmt.Printf("%v", input)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -37,10 +44,12 @@ func CheckInOrOutStudent(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
 
 	filter := bson.M{
-		"studentId":   input.StudentID,
-		"classroomId": input.ClassroomID,
-		"date":        today,
-		"sessionId":   input.SessionID,
+		"student_id":   input.StudentID,
+		"classroom_id": input.ClassroomID,
+		"session_id":   input.SessionID,
+		"date":         today,
+		"teacher_id":   input.TeacherID,
+		"status":       input.Status,
 	}
 
 	var existing models.Attendance
@@ -55,7 +64,7 @@ func CheckInOrOutStudent(c *gin.Context) {
 			update = bson.M{
 				"$set": bson.M{
 					"checkinTime": now,
-					"teacherId":   input.TeacherID,
+					"teacher_id":  input.TeacherID,
 					"status":      "checkin",
 				},
 			}
@@ -63,7 +72,7 @@ func CheckInOrOutStudent(c *gin.Context) {
 			update = bson.M{
 				"$set": bson.M{
 					"checkoutTime": now,
-					"teacherId":    input.TeacherID,
+					"teacher_id":   input.TeacherID,
 					"status":       "checkout",
 				},
 			}
@@ -112,9 +121,9 @@ func CheckInOrOutStudent(c *gin.Context) {
 
 // GetAttendanceBySession returns all attendance records for a given session
 func GetAttendanceBySession(c *gin.Context) {
-	sessionId := c.Param("sessionId")
-	if sessionId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing sessionId"})
+	session_id := c.Param("session_id")
+	if session_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing session_id"})
 		return
 	}
 
@@ -123,7 +132,7 @@ func GetAttendanceBySession(c *gin.Context) {
 	defer cancel()
 
 	// Filter by sessionId
-	filter := bson.M{"sessionId": sessionId}
+	filter := bson.M{"session_id": session_id}
 
 	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
@@ -142,8 +151,8 @@ func GetAttendanceBySession(c *gin.Context) {
 	trimmed := make([]gin.H, 0, len(attendances))
 	for _, a := range attendances {
 		trimmed = append(trimmed, gin.H{
-			"studentId": a.StudentID,
-			"status":    a.Status,
+			"student_id": a.StudentID,
+			"status":     a.Status,
 		})
 	}
 

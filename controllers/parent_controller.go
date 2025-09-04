@@ -21,8 +21,8 @@ func GetMyChildren(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only parent can view their children"})
 		return
 	}
-	parentID := c.GetString("user_id") // <-- match your AuthMiddleware key
-	if parentID == "" {
+	parent_id := c.GetString("user_id") // <-- match your AuthMiddleware key
+	if parent_id == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
@@ -32,7 +32,7 @@ func GetMyChildren(c *gin.Context) {
 
 	usersCol := db.MongoClient.Database("school_attendance").Collection("users")
 	var parent bson.M
-	if err := usersCol.FindOne(ctx, bson.M{"_id": parentID, "role": "parent"}).Decode(&parent); err != nil {
+	if err := usersCol.FindOne(ctx, bson.M{"_id": parent_id, "role": "parent"}).Decode(&parent); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Parent not found"})
 		return
 	}
@@ -74,10 +74,10 @@ func GetMyChildren(c *gin.Context) {
 // Parents can only read attendance for students they’re subscribed to.
 func GetAttendanceByStudent(c *gin.Context) {
 	role := c.GetString("role")
-	userID := c.GetString("user_id")
-	studentID := c.Param("studentId")
-	if studentID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing studentId"})
+	user_id := c.GetString("user_id")
+	student_id := c.Param("student_id")
+	if student_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing student id"})
 		return
 	}
 
@@ -89,14 +89,14 @@ func GetAttendanceByStudent(c *gin.Context) {
 		var parent models.User
 		if err := db.MongoClient.Database("school_attendance").
 			Collection("users").
-			FindOne(ctx, bson.M{"_id": userID, "role": "parent"}).
+			FindOne(ctx, bson.M{"_id": user_id, "role": "parent"}).
 			Decode(&parent); err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
 		allowed := false
 		for _, id := range parent.SubscribedStudents {
-			if id == studentID {
+			if id == student_id {
 				allowed = true
 				break
 			}
@@ -111,7 +111,7 @@ func GetAttendanceByStudent(c *gin.Context) {
 	to := c.Query("to")
 
 	// Build filter
-	filter := bson.M{"studentId": studentID}
+	filter := bson.M{"student_id": student_id}
 	if from != "" || to != "" {
 		dateCond := bson.M{}
 		if from != "" {
@@ -152,9 +152,9 @@ func GetMyChildAttendance(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only parent can view attendance"})
 		return
 	}
-	parentID := c.GetString("user_id") // make sure your AuthMiddleware sets "user_id"
-	studentID := c.Param("studentId")
-	if parentID == "" || studentID == "" {
+	parent_id := c.GetString("user_id") // make sure your AuthMiddleware sets "user_id"
+	student_id := c.Param("student_id")
+	if parent_id == "" || student_id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing parent or student"})
 		return
 	}
@@ -166,7 +166,7 @@ func GetMyChildAttendance(c *gin.Context) {
 	// 1) Verify the student is in this parent's subscribedStudents
 	var parentDoc bson.M
 	if err := dbx.Collection("users").
-		FindOne(ctx, bson.M{"_id": parentID, "role": "parent"}).
+		FindOne(ctx, bson.M{"_id": parent_id, "role": "parent"}).
 		Decode(&parentDoc); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Parent not found"})
 		return
@@ -174,7 +174,7 @@ func GetMyChildAttendance(c *gin.Context) {
 	ok := false
 	if arr, _ := parentDoc["subscribedStudents"].(bson.A); len(arr) > 0 {
 		for _, v := range arr {
-			if s, _ := v.(string); s == studentID {
+			if s, _ := v.(string); s == student_id {
 				ok = true
 				break
 			}
@@ -189,9 +189,9 @@ func GetMyChildAttendance(c *gin.Context) {
 	from := c.Query("from")
 	to := c.Query("to")
 
-	filter := bson.M{"studentId": studentID}
+	filter := bson.M{"student_id": student_id}
 	if from != "" || to != "" {
-		and := bson.A{bson.M{"studentId": studentID}}
+		and := bson.A{bson.M{"student_id": student_id}}
 		if from != "" {
 			and = append(and, bson.M{"date": bson.M{"$gte": from}})
 		}
