@@ -15,19 +15,21 @@ import (
 func CreateStudent(c *gin.Context) {
 	type Input struct {
 		FirstName   string `json:"firstName,omitempty"`
+		SchoolID    string `json:"school_id"`
 		LastName    string `json:"lastName,omitempty"`
 		Name        string `json:"name"` // Required
 		DateOfBirth string `json:"dob,omitempty"`
 		Address     string `json:"address,omitempty"`
 		ProfileURL  string `json:"profileUrl,omitempty"`
-		Sex         string `json:"sex,omitempty"`         // Optional: "male", "female", etc.
-		ParentPhone string `json:"parentPhone"`           // Required
-		ClassroomID string `json:"classroomId,omitempty"` // Optional
-		TermID      string `json:"termId,omitempty"`      // Optional
-		Status      string `json:"status,omitempty"`      // Optional: "active" or "inactive"
+		IdNumber    string `json:"id_number,omitempty"`
+		Sex         string `json:"sex,omitempty"`          // Optional: "male", "female", etc.
+		ParentPhone string `json:"parentPhone"`            // Required
+		ClassroomID string `json:"classroom_id,omitempty"` // Optional
+		TermID      string `json:"term_id,omitempty"`      // Optional
+		Status      string `json:"status,omitempty"`       // Optional: "active" or "inactive"
 		Enrollments []struct {
-			TermID      string `json:"termId,omitempty"`
-			ClassroomID string `json:"classroomId,omitempty"`
+			TermID      string `json:"term_id,omitempty"`
+			ClassroomID string `json:"classroom_id,omitempty"`
 		} `json:"enrollments,omitempty"`
 	}
 
@@ -51,29 +53,31 @@ func CreateStudent(c *gin.Context) {
 	if input.TermID != "" || input.ClassroomID != "" {
 		enrollment := bson.M{}
 		if input.TermID != "" {
-			enrollment["termId"] = input.TermID
+			enrollment["term_id"] = input.TermID
 		}
 		if input.ClassroomID != "" {
-			enrollment["classroomId"] = input.ClassroomID
+			enrollment["classroom_id"] = input.ClassroomID
 		}
 		enrollments = append(enrollments, enrollment)
 	}
 
 	student := bson.M{
-		"_id":         id,
-		"firstName":   input.FirstName,
-		"lastName":    input.LastName,
-		"name":        input.Name,
-		"dob":         input.DateOfBirth,
-		"address":     input.Address,
-		"profileUrl":  input.ProfileURL,
-		"sex":         input.Sex,
-		"parentPhone": input.ParentPhone,
-		"status":      status,
-		"classroomId": input.ClassroomID,
-		"termId":      input.TermID,
-		"enrollments": enrollments,
-		"createdAt":   createdAt,
+		"_id":          id,
+		"firstName":    input.FirstName,
+		"lastName":     input.LastName,
+		"name":         input.Name,
+		"dob":          input.DateOfBirth,
+		"address":      input.Address,
+		"profileUrl":   input.ProfileURL,
+		"sex":          input.Sex,
+		"parentPhone":  input.ParentPhone,
+		"status":       status,
+		"classroom_id": input.ClassroomID,
+		"term_id":      input.TermID,
+		"school_id":    input.SchoolID,
+		"enrollments":  enrollments,
+		"createdAt":    createdAt,
+		"id_number":    input.IdNumber,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -180,8 +184,8 @@ func UpdateStudentClassroom(c *gin.Context) {
 	id := c.Param("id")
 
 	type Input struct {
-		ClassroomID string `json:"classroomId"`
-		TermID      string `json:"termId"`
+		ClassroomID string `json:"classroom_id"`
+		TermID      string `json:"term_id"`
 	}
 
 	var input Input
@@ -204,8 +208,8 @@ func UpdateStudentClassroom(c *gin.Context) {
 	}
 
 	// Check if classroomId and termId are empty and enrollments is null/empty
-	classroomID, classroomExists := student["classroomId"]
-	termID, termExists := student["termId"]
+	classroomID, classroomExists := student["classroom_id"]
+	termID, termExists := student["term_id"]
 	enrollments, enrollmentsExist := student["enrollments"]
 
 	isClassroomEmpty := !classroomExists || classroomID == ""
@@ -214,9 +218,9 @@ func UpdateStudentClassroom(c *gin.Context) {
 
 	update := bson.M{
 		"$set": bson.M{
-			"classroomId": input.ClassroomID,
-			"termId":      input.TermID,
-			"updatedAt":   time.Now(),
+			"classroom_id": input.ClassroomID,
+			"term_id":      input.TermID,
+			"updatedAt":    time.Now(),
 		},
 	}
 
@@ -224,16 +228,16 @@ func UpdateStudentClassroom(c *gin.Context) {
 	if isClassroomEmpty && isTermEmpty && isEnrollmentsEmpty {
 		update["$set"].(bson.M)["enrollments"] = []bson.M{
 			{
-				"classroomId": input.ClassroomID,
-				"termId":      input.TermID,
+				"classroom_id": input.ClassroomID,
+				"term_id":      input.TermID,
 			},
 		}
 	} else {
 		// Otherwise add to existing enrollments
 		update["$addToSet"] = bson.M{
 			"enrollments": bson.M{
-				"classroomId": input.ClassroomID,
-				"termId":      input.TermID,
+				"classroom_id": input.ClassroomID,
+				"term_id":      input.TermID,
 			},
 		}
 	}
@@ -260,12 +264,12 @@ func UpdateStudent(c *gin.Context) {
 		ProfileURL  *string `json:"profileUrl,omitempty"`
 		Sex         *string `json:"sex,omitempty"`
 		ParentPhone *string `json:"parentPhone,omitempty"`
-		ClassroomID *string `json:"classroomId,omitempty"`
-		TermID      *string `json:"termId,omitempty"`
+		ClassroomID *string `json:"classroom_id,omitempty"`
+		TermID      *string `json:"term_id,omitempty"`
 		Status      *string `json:"status,omitempty"`
 		Enrollments *[]struct {
-			TermID      string `json:"termId,omitempty"`
-			ClassroomID string `json:"classroomId,omitempty"`
+			TermID      string `json:"term_id,omitempty"`
+			ClassroomID string `json:"classroom_id,omitempty"`
 		} `json:"enrollments,omitempty"`
 	}
 
@@ -360,6 +364,76 @@ func UpdateStudent(c *gin.Context) {
 	})
 }
 
+// GetStudent retrieves a single student by their _id with optional classroom and term data
+// Returns the student as JSON with joined classroom and term information
+func GetStudent(c *gin.Context) {
+	id := c.Param("id")
+
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing student id"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("students")
+
+	// Use aggregation to join with classrooms and terms data
+	cursor, err := col.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{"_id": id},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "classrooms",
+				"localField":   "classroom_id",
+				"foreignField": "_id",
+				"as":           "classroom",
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "terms",
+				"localField":   "term_id",
+				"foreignField": "_id",
+				"as":           "term",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$classroom",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$term",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch student"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var students []bson.M
+	if err := cursor.All(ctx, &students); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode student"})
+		return
+	}
+
+	if len(students) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, students[0])
+}
+
 // GetStudents retrieves all students from the database with optional classroom and term data
 // Returns a list of all students as JSON with joined classroom and term information
 func GetStudents(c *gin.Context) {
@@ -373,7 +447,7 @@ func GetStudents(c *gin.Context) {
 		bson.M{
 			"$lookup": bson.M{
 				"from":         "classrooms",
-				"localField":   "classroomId",
+				"localField":   "classroom_id",
 				"foreignField": "_id",
 				"as":           "classroom",
 			},
@@ -381,7 +455,7 @@ func GetStudents(c *gin.Context) {
 		bson.M{
 			"$lookup": bson.M{
 				"from":         "terms",
-				"localField":   "termId",
+				"localField":   "term_id",
 				"foreignField": "_id",
 				"as":           "term",
 			},
@@ -456,7 +530,7 @@ func GetStudentsByClassroomAndTerm(c *gin.Context) {
 
 // GetStudentsByClassroom fetches students by classroomId only (no termId)
 func GetStudentsByClassroom(c *gin.Context) {
-	classroomID := c.Param("classroomId")
+	classroomID := c.Param("classroom_id")
 
 	if classroomID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing classroomId"})
@@ -469,9 +543,133 @@ func GetStudentsByClassroom(c *gin.Context) {
 	col := db.MongoClient.Database("school_attendance").Collection("students")
 
 	// Find students where classroomId matches
-	filter := bson.M{"classroomId": classroomID}
+	filter := bson.M{"classroom_id": classroomID}
 
 	cursor, err := col.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch students"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var students []bson.M
+	if err := cursor.All(ctx, &students); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode students"})
+		return
+	}
+
+	c.JSON(http.StatusOK, students)
+}
+
+func GetStudentsByClassroomWithAttendance(c *gin.Context) {
+	classroomID := c.Param("classroom_id")
+	termID := c.Param("term_id")
+	if classroomID == "" || termID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing classroomId or termId"})
+		return
+	}
+	col := db.MongoClient.Database("school_attendance").Collection("students")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	dateStr := "2025-09-01"
+
+	// Use aggregation to join students with their attendance records
+	pipeline := bson.A{
+		// Match students by classroomId and termId
+		bson.M{
+			"$match": bson.M{
+				"classroom_id": classroomID,
+				"term_id":      termID,
+			},
+		},
+		// Lookup attendance records for each student
+		bson.M{
+			"$lookup": bson.M{
+				"from": "attendance",
+				"let": bson.M{
+					"student_id": "$_id",
+				},
+				"pipeline": []bson.M{
+					{
+						"$match": bson.M{
+							"$expr": bson.M{
+								"$and": []bson.M{
+									{"$eq": []any{"$student_id", "$$student_id"}},
+									{"$eq": []any{"$date", dateStr}},
+								},
+							},
+						},
+					},
+				},
+				"as": "attendanceRecords",
+			},
+		},
+	}
+	cursor, err := col.Aggregate(ctx, pipeline)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch students with attendance"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode students"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+}
+
+// GetStudentsBySchoolID retrieves all students for a specific school
+// Returns a list of students filtered by school_id as JSON
+func GetStudentsBySchoolID(c *gin.Context) {
+	schoolID := c.Param("school_id")
+	if schoolID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "School ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("students")
+
+	// Use aggregation to join with classrooms and terms data
+	cursor, err := col.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{"school_id": schoolID},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "classrooms",
+				"localField":   "classroom_id",
+				"foreignField": "_id",
+				"as":           "classroom",
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "terms",
+				"localField":   "term_id",
+				"foreignField": "_id",
+				"as":           "term",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$classroom",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$term",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch students"})
 		return

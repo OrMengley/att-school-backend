@@ -22,11 +22,12 @@ import (
 // sanitizeUser removes sensitive fields before sending to client
 func sanitizeUser(u models.User) gin.H {
 	return gin.H{
-		"_id":      u.ID,
-		"name":     u.Name,
-		"email":    u.Email,
-		"role":     u.Role,
-		"schoolId": u.SchoolID,
+		"_id":       u.ID,
+		"name":      u.Name,
+		"email":     u.Email,
+		"role":      u.Role,
+		"status":    u.Status,
+		"school_id": u.SchoolID,
 		// include these if you want them client-side
 		"classroomIds":       u.ClassroomIDs,
 		"subscribedStudents": u.SubscribedStudents,
@@ -54,7 +55,7 @@ func GetAllUsers(c *gin.Context) {
 
 	// If current user is a school admin, only allow access to their school's users
 	if currentRole == "admin" {
-		filter["schoolId"] = schoolID
+		filter["school_id"] = schoolID
 	}
 
 	cursor, err := collection.Find(ctx, filter)
@@ -70,7 +71,6 @@ func GetAllUsers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode users"})
 		return
 	}
-
 	c.JSON(http.StatusOK, users)
 }
 
@@ -200,6 +200,12 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// Check user status if it exists
+	if user.Status != "" && user.Status != "active" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Account is inactive"})
+		return
+	}
+
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
 		"role":    user.Role,
@@ -299,8 +305,9 @@ func AdminUpdateUser(c *gin.Context) {
 	var input struct {
 		Name     *string `json:"name,omitempty"`
 		Email    *string `json:"email,omitempty"`
-		Role     *string `json:"role,omitempty"`     // "super_admin" | "admin" | "teacher" | "parent"
-		SchoolID *string `json:"schoolId,omitempty"` // required for admin/teacher/parent
+		Status   *string `json:"status,omitempty"`
+		Role     *string `json:"role,omitempty"`      // "super_admin" | "admin" | "teacher" | "parent"
+		SchoolID *string `json:"school_id,omitempty"` // required for admin/teacher/parent
 		// ClassroomIDs *[]string `json:"classroomIds,omitempty"`
 	}
 
@@ -319,8 +326,11 @@ func AdminUpdateUser(c *gin.Context) {
 	if input.Role != nil {
 		update["role"] = strings.TrimSpace(*input.Role)
 	}
+	if input.Status != nil {
+		update["status"] = strings.TrimSpace(*input.Status)
+	}
 	if input.SchoolID != nil {
-		update["schoolId"] = strings.TrimSpace(*input.SchoolID)
+		update["school_id"] = strings.TrimSpace(*input.SchoolID)
 	}
 	// if input.ClassroomIDs != nil {
 	// 	update["classroomIds"] = *input.ClassroomIDs
@@ -481,51 +491,6 @@ func TestLoginEndpoint(c *gin.Context) {
 	})
 }
 
-func CreateSchool(c *gin.Context) {
-	role := c.GetString("role")
-	if role != "super_admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only super_admin can create schools"})
-		return
-	}
-
-	type SchoolInput struct {
-		ID      string `json:"_id"`
-		Name    string `json:"name"`
-		Address string `json:"address"`
-	}
-
-	var input SchoolInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Validate ID
-	if input.ID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "School ID is required"})
-		return
-	}
-
-	school := bson.M{
-		"_id":       input.ID,
-		"name":      input.Name,
-		"address":   input.Address,
-		"createdAt": time.Now(),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	collection := db.MongoClient.Database("school_attendance").Collection("schools")
-	_, err := collection.InsertOne(ctx, school)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create school"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, school)
-}
-
 func GetSchools(c *gin.Context) {
 	role := c.GetString("role")
 	if role != "super_admin" {
@@ -631,7 +596,7 @@ func CreateUserV2(c *gin.Context) {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 		Role     string `json:"role"`
-		SchoolID string `json:"schoolId,omitempty"`
+		SchoolID string `json:"school_id,omitempty"`
 	}
 
 	var input UserInput
@@ -691,11 +656,11 @@ func CreateUserV2(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"_id":      user.ID,
-		"name":     user.Name,
-		"email":    user.Email,
-		"role":     user.Role,
-		"schoolId": user.SchoolID,
+		"_id":       user.ID,
+		"name":      user.Name,
+		"email":     user.Email,
+		"role":      user.Role,
+		"school_id": user.SchoolID,
 	})
 }
 

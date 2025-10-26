@@ -15,12 +15,14 @@ import (
 
 func CreateGrade(c *gin.Context) {
 	type Input struct {
-		Name   string `json:"name"`
-		TermID string `json:"termId"`
+		Name         string `json:"name"`
+		TermID       string `json:"term_id"`
+		SchoolID     string `json:"school_id"`
+		DepartmentID string `json:"department_id"`
 	}
 
 	var input Input
-	if err := c.ShouldBindJSON(&input); err != nil || input.Name == "" || input.TermID == "" {
+	if err := c.ShouldBindJSON(&input); err != nil || input.Name == "" || input.TermID == "" || input.DepartmentID == "" || input.SchoolID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid grade input"})
 		return
 	}
@@ -32,11 +34,12 @@ func CreateGrade(c *gin.Context) {
 	}
 
 	grade := models.Grade{
-		ID:        "grade-" + uuid.New().String(),
-		Name:      input.Name,
-		TermID:    input.TermID,
-		SchoolID:  schoolID, // ✅ Save schoolId
-		CreatedAt: time.Now(),
+		ID:           "grade-" + uuid.New().String(),
+		Name:         input.Name,
+		DepartmentID: input.DepartmentID,
+		TermID:       input.TermID,
+		SchoolID:     schoolID, // ✅ Save schoolId
+		CreatedAt:    time.Now(),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -59,7 +62,7 @@ func GetGrades(c *gin.Context) {
 	filter := bson.M{}
 
 	if role == "admin" {
-		filter["schoolId"] = schoolID
+		filter["school_id"] = schoolID
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -69,6 +72,45 @@ func GetGrades(c *gin.Context) {
 	cursor, err := col.Find(ctx, filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch grades"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var grades []bson.M
+	if err := cursor.All(ctx, &grades); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, grades)
+}
+
+// GetGradesByTermID retrieves all grades for a specific term
+// Access control: Admins can only see grades from their school
+func GetGradesByTermID(c *gin.Context) {
+	termID := c.Param("term_id")
+	if termID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term ID is required"})
+		return
+	}
+
+	role := c.GetString("role")
+	schoolID := c.GetString("school_id")
+
+	filter := bson.M{"term_id": termID}
+
+	// If user is admin, restrict to their school only
+	if role == "admin" && schoolID != "" {
+		filter["school_id"] = schoolID
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("grades")
+	cursor, err := col.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch grades by term ID"})
 		return
 	}
 	defer cursor.Close(ctx)

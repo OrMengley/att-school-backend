@@ -16,9 +16,9 @@ import (
 
 func CreateDepartment(c *gin.Context) {
 	type Input struct {
-		ID       string `json:"id"`
+		ID       string `json:"_id"`
 		Name     string `json:"name"`
-		SchoolID string `json:"schoolId"`
+		SchoolID string `json:"school_id"`
 	}
 	id := "department-" + uuid.New().String()
 	var input Input
@@ -31,7 +31,7 @@ func CreateDepartment(c *gin.Context) {
 	dept := bson.M{
 		"_id":       id,
 		"name":      input.Name,
-		"schoolId":  input.SchoolID,
+		"school_id": input.SchoolID,
 		"createdAt": time.Now(),
 	}
 
@@ -57,13 +57,13 @@ func GetDepartments(c *gin.Context) {
 	cursor, err := collection.Aggregate(ctx, bson.A{
 		bson.M{
 			"$match": bson.M{
-				"schoolId": c.GetString("school_id"),
+				"school_id": c.GetString("school_id"),
 			},
 		},
 		bson.M{
 			"$lookup": bson.M{
 				"from":         "schools",
-				"localField":   "schoolId",
+				"localField":   "school_id",
 				"foreignField": "_id",
 				"as":           "school",
 			},
@@ -142,7 +142,7 @@ func UpdateDepartment(c *gin.Context) {
 
 	// First check if department exists and belongs to admin's school
 	var existingDepartment bson.M
-	err := col.FindOne(ctx, bson.M{"_id": departmentID, "schoolId": schoolID}).Decode(&existingDepartment)
+	err := col.FindOne(ctx, bson.M{"_id": departmentID, "school_id": schoolID}).Decode(&existingDepartment)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or you don't have permission to update it"})
 		return
@@ -151,7 +151,7 @@ func UpdateDepartment(c *gin.Context) {
 	// Update the department
 	_, err = col.UpdateOne(
 		ctx,
-		bson.M{"_id": departmentID, "schoolId": schoolID},
+		bson.M{"_id": departmentID, "school_id": schoolID},
 		bson.M{"$set": update},
 	)
 
@@ -162,6 +162,56 @@ func UpdateDepartment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Department updated successfully",
-		"id":      departmentID,
+		"_id":     departmentID,
 	})
+}
+
+// GetDepartmentsBySchoolID retrieves all departments for a specific school
+// Returns a list of departments filtered by school_id as JSON
+func GetDepartmentsBySchoolID(c *gin.Context) {
+	schoolID := c.Param("school_id")
+	if schoolID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "School ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := db.MongoClient.Database("school_attendance").Collection("departments")
+
+	cursor, err := collection.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{
+				"school_id": schoolID,
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "schools",
+				"localField":   "school_id",
+				"foreignField": "_id",
+				"as":           "school",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$school",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var departments []bson.M
+	if err := cursor.All(ctx, &departments); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode departments"})
+		return
+	}
+
+	c.JSON(http.StatusOK, departments)
 }

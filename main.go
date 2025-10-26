@@ -32,6 +32,7 @@ func main() {
 	r.POST("/update-password", controllers.UpdateUserPassword)
 
 	r.GET("/terms/:id", controllers.GetTerm)
+
 	r.GET("/classrooms/:id", controllers.GetClassroom)
 	r.GET("/students/classroom/:classroom_id/term/:term_id", controllers.GetStudentsByClassroomAndTerm)
 	r.POST("/classrooms/:id/sessions", controllers.AddSessionToClassroom)
@@ -42,6 +43,7 @@ func main() {
 	// r.GET("/schools/:id", controllers.GetSchool) is use to fetch only school infor for teacher
 	r.GET("/schools/:id", controllers.GetSchool)
 	r.GET("/attendance/session/:session_id", controllers.GetAttendanceBySession)
+	// r.GET("/terms/department/:department_id", controllers.GetTermsByDepartmentID) // input deparment id for select term
 	// Protected routes
 	protected := r.Group("/")
 	protected.Use(middleware.AuthMiddleware())
@@ -51,11 +53,13 @@ func main() {
 		protected.GET("/schools", controllers.GetSchools)
 		protected.POST("/departments", controllers.CreateDepartment)
 		protected.GET("/departments", controllers.GetDepartments)
+		protected.GET("/departments/school/:school_id", controllers.GetDepartmentsBySchoolID)
 		protected.PUT("/departments/:id", controllers.UpdateDepartment)
 		protected.POST("/terms", controllers.CreateTerm)
-		protected.GET("/terms", controllers.GetTerms)
+		protected.GET("/terms", controllers.GetTermsBySchoolID) // ?schoolId=value
 		protected.POST("/grades", controllers.CreateGrade)
 		protected.GET("/grades", controllers.GetGrades)
+		protected.GET("/grades/term/:term_id", controllers.GetGradesByTermID)
 		protected.PUT("/grades/:id", controllers.UpdateGrade)
 		protected.POST("/classrooms", controllers.CreateClassroom)
 		protected.GET("/classrooms", controllers.GetClassrooms)
@@ -69,9 +73,7 @@ func main() {
 		protected.GET("/parents/me/children", controllers.GetMyChildren)
 		protected.GET("/parents/me/children/:student_id/attendance", controllers.GetMyChildAttendance)
 		// protected.GET("/parents/:parentId/children", controllers.GetChildrenForParent)
-
 		protected.GET("/attendance/student/:student_id", controllers.GetAttendanceByStudent)
-
 		protected.PUT("/users/:id/subscriptions", controllers.UpdateParentSubscriptions)
 		protected.PUT("/users/:id", controllers.AdminUpdateUser)
 		protected.PUT("/users/:id/password", controllers.AdminSetUserPassword)
@@ -80,7 +82,11 @@ func main() {
 		// protected.GET("/attendance/student/:studentId", controllers.AttendanceByStudent)          // ?from=&to=
 		protected.GET("/attendance/range", controllers.AttendanceRangeForTeacher) // ?from=&to=
 		protected.GET("/attendance/today", controllers.AttendanceTodayForTeacher) // today only
+		protected.GET("/terms/department/:department_id", controllers.GetTermsByDepartmentID)
+		protected.GET("/classrooms/school/:school_id", controllers.GetClassroomsBySchoolID)
+		protected.GET("/student/:id", controllers.GetStudent)
+		protected.GET("/classrooms/term/:term_id", controllers.GetClassroomByTermID)
+		protected.GET("/students/school/:school_id", controllers.GetStudentsBySchoolID)
 	}
-
 	r.Run(":8080")
 }

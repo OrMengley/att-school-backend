@@ -23,25 +23,31 @@ import (
 func CreateClassroom(c *gin.Context) {
 
 	type Input struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		GradeID string `json:"gradeId"`
-		TermID  string `json:"termId"`
+		ID           string `json:"_id"`
+		Name         string `json:"name"`
+		GradeID      string `json:"grade_id"`
+		TermID       string `json:"term_id"`
+		SchoolID     string `json:"school_id"`
+		Status       string `json:"status"`
+		DepartmentID string `json:"department_id"`
 	}
 
 	var input Input
 	// if err := c.ShouldBindJSON(&input); err != nil || input.ID == "" || input.GradeID == "" {
-	if err := c.ShouldBindJSON(&input); err != nil || input.GradeID == "" {
+	if err := c.ShouldBindJSON(&input); err != nil || input.GradeID == "" || input.DepartmentID == "" || input.SchoolID == "" || input.Name == "" || input.Status == "" || input.TermID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid classroom input"})
 		return
 	}
 	id := "classroom-" + uuid.New().String() // ✅ Auto UUID
 	classroom := bson.M{
-		"_id":       id,
-		"name":      input.Name,
-		"gradeId":   input.GradeID,
-		"termId":    input.TermID,
-		"createdAt": time.Now(),
+		"_id":           id,
+		"name":          input.Name,
+		"grade_id":      input.GradeID,
+		"status":        input.Status,
+		"department_id": input.DepartmentID,
+		"school_id":     input.SchoolID,
+		"term_id":       input.TermID,
+		"createdAt":     time.Now(),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -69,7 +75,7 @@ func GetClassrooms(c *gin.Context) {
 		bson.M{
 			"$lookup": bson.M{
 				"from":         "grades",
-				"localField":   "gradeId",
+				"localField":   "grade_id",
 				"foreignField": "_id",
 				"as":           "grade",
 			},
@@ -77,7 +83,7 @@ func GetClassrooms(c *gin.Context) {
 		bson.M{
 			"$lookup": bson.M{
 				"from":         "terms",
-				"localField":   "termId",
+				"localField":   "term_id",
 				"foreignField": "_id",
 				"as":           "term",
 			},
@@ -139,7 +145,7 @@ func GetClassroom(c *gin.Context) {
 		bson.M{
 			"$lookup": bson.M{
 				"from":         "grades",
-				"localField":   "gradeId",
+				"localField":   "grade_id",
 				"foreignField": "_id",
 				"as":           "grade",
 			},
@@ -147,7 +153,7 @@ func GetClassroom(c *gin.Context) {
 		bson.M{
 			"$lookup": bson.M{
 				"from":         "terms",
-				"localField":   "termId",
+				"localField":   "term_id",
 				"foreignField": "_id",
 				"as":           "term",
 			},
@@ -214,10 +220,10 @@ func UpdateClassroom(c *gin.Context) {
 		updateFields["name"] = input.Name
 	}
 	if input.GradeID != "" {
-		updateFields["gradeId"] = input.GradeID
+		updateFields["grade_id"] = input.GradeID
 	}
 	if input.TermID != "" {
-		updateFields["termId"] = input.TermID
+		updateFields["term_id"] = input.TermID
 	}
 	// if input.StudentIDs != nil {
 	// 	updateFields["studentIds"] = input.StudentIDs
@@ -286,8 +292,8 @@ func UpdateClassroom(c *gin.Context) {
 func AssignStudentsToClassroom(c *gin.Context) {
 	type Input struct {
 		StudentIDs  []string `json:"studentIds"`
-		TermID      string   `json:"termId"`
-		ClassroomID string   `json:"classroomId"`
+		TermID      string   `json:"term_id"`
+		ClassroomID string   `json:"classroom_id"`
 	}
 
 	var input Input
@@ -306,13 +312,13 @@ func AssignStudentsToClassroom(c *gin.Context) {
 
 		update := bson.M{
 			"$set": bson.M{
-				"termId":      input.TermID,
+				"term_id":     input.TermID,
 				"classroomId": input.ClassroomID,
 			},
 			"$addToSet": bson.M{
 				"enrollments": bson.M{
-					"termId":      input.TermID,
-					"classroomId": input.ClassroomID,
+					"term_id":      input.TermID,
+					"classroom_id": input.ClassroomID,
 				},
 			},
 		}
@@ -330,8 +336,8 @@ func AssignStudentsToClassroom(c *gin.Context) {
 // AssignTeacherToClassroom assigns a teacher to a classroom by updating the teacher's classroomIds array
 func AssignTeacherToClassroom(c *gin.Context) {
 	type Input struct {
-		TeacherID   string `json:"teacherId"`
-		ClassroomID string `json:"classroomId"`
+		TeacherID   string `json:"teacher_id"`
+		ClassroomID string `json:"classroom_id"`
 	}
 
 	var input Input
@@ -377,12 +383,13 @@ func AddSessionToClassroom(c *gin.Context) {
 	// Input: array of sessions
 	var input []struct {
 		SubjectName      string `json:"subjectName"`
-		TeacherID        string `json:"teacherId"`
+		TeacherID        string `json:"teacher_id"`
 		SessionDay       string `json:"sessionDay"`
 		SessionStartHour string `json:"sessionStartHour"`
 		SessionStartMin  string `json:"sessionStartMin"`
 		SessionEndHour   string `json:"sessionEndHour"`
 		SessionEndMin    string `json:"sessionEndMin"`
+		SessionStatus    string `json:"sessionStatus"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -407,6 +414,7 @@ func AddSessionToClassroom(c *gin.Context) {
 			SessionStartMin:  s.SessionStartMin,
 			SessionEndHour:   s.SessionEndHour,
 			SessionEndMin:    s.SessionEndMin,
+			SessionStatus:    s.SessionStatus,
 		})
 	}
 
@@ -563,4 +571,135 @@ func RemoveSessionFromClassroom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Session removed successfully"})
+}
+
+// GetClassroomsBySchoolID retrieves all classrooms for a specific school
+
+// Returns a list of classrooms filtered by school_id as JSON
+func GetClassroomsBySchoolID(c *gin.Context) {
+	schoolID := c.Param("school_id")
+	if schoolID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "School ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+
+	cursor, err := col.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{
+				"school_id": schoolID,
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "grades",
+				"localField":   "grade_id",
+				"foreignField": "_id",
+				"as":           "grade",
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "terms",
+				"localField":   "term_id",
+				"foreignField": "_id",
+				"as":           "term",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$term",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$grade",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch classrooms"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode classrooms"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+}
+
+// GetClassroomByTermID retrieves all classrooms for a specific term
+// Returns a list of classrooms filtered by term_id as JSON
+func GetClassroomByTermID(c *gin.Context) {
+	termID := c.Param("term_id")
+	if termID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+
+	cursor, err := col.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{
+				"term_id": termID,
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "grades",
+				"localField":   "grade_id",
+				"foreignField": "_id",
+				"as":           "grade",
+			},
+		},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "terms",
+				"localField":   "term_id",
+				"foreignField": "_id",
+				"as":           "term",
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$term",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		bson.M{
+			"$unwind": bson.M{
+				"path":                       "$grade",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch classrooms"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode classrooms"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }
