@@ -349,8 +349,19 @@ func AssignTeacherToClassroom(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	col := db.MongoClient.Database("school_attendance").Collection("users")
+	// First, get the classroom to retrieve the term_id
+	classroomsCol := db.MongoClient.Database("school_attendance").Collection("classrooms")
+	var classroom struct {
+		TermID string `bson:"term_id"`
+	}
+	err := classroomsCol.FindOne(ctx, bson.M{"_id": input.ClassroomID}).Decode(&classroom)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
+		return
+	}
 
+	// Update the teacher's classroomIds array
+	usersCol := db.MongoClient.Database("school_attendance").Collection("users")
 	filter := bson.M{"_id": input.TeacherID, "role": "teacher"}
 	update := bson.M{
 		"$addToSet": bson.M{
@@ -358,7 +369,7 @@ func AssignTeacherToClassroom(c *gin.Context) {
 		},
 	}
 
-	result, err := col.UpdateOne(ctx, filter, update)
+	result, err := usersCol.UpdateOne(ctx, filter, update)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign teacher to classroom"})
 		return
@@ -366,6 +377,44 @@ func AssignTeacherToClassroom(c *gin.Context) {
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Teacher not found or not a teacher role"})
 		return
+	}
+
+	// Add enrollment to teacher if they don't already have it
+	if classroom.TermID != "" {
+		// Check if teacher already has this enrollment
+		var teacher struct {
+			Enrollments []models.Enrollment `bson:"enrollments"`
+		}
+
+		err := usersCol.FindOne(ctx, bson.M{"_id": input.TeacherID}).Decode(&teacher)
+		if err == nil { // Only proceed if teacher was found
+			// Check if enrollment already exists
+			enrollmentExists := false
+			for _, enrollment := range teacher.Enrollments {
+				if enrollment.TermID == classroom.TermID && enrollment.ClassroomID == input.ClassroomID {
+					enrollmentExists = true
+					break
+				}
+			}
+
+			// If enrollment doesn't exist, add it
+			if !enrollmentExists {
+				teacherUpdate := bson.M{
+					"$addToSet": bson.M{
+						"enrollments": bson.M{
+							"term_id":      classroom.TermID,
+							"classroom_id": input.ClassroomID,
+						},
+					},
+				}
+
+				_, err := usersCol.UpdateOne(ctx, bson.M{"_id": input.TeacherID}, teacherUpdate)
+				if err != nil {
+					// Log error but don't fail the whole operation
+					fmt.Printf("Failed to add enrollment for teacher %s: %v\n", input.TeacherID, err)
+				}
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Teacher assigned to classroom successfully"})
@@ -445,6 +494,7 @@ func AddSessionToClassroom(c *gin.Context) {
 	// 2. Fetch existing sessions for this classroom
 	var existing struct {
 		Sessions []models.Session `bson:"sessions"`
+		TermID   string           `bson:"term_id"`
 	}
 	err := col.FindOne(ctx, bson.M{"_id": classroomID}).Decode(&existing)
 	if err != nil {
@@ -497,6 +547,54 @@ func AddSessionToClassroom(c *gin.Context) {
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
 		return
+	}
+
+	// Add enrollment to teachers if they don't already have it
+	// Get the term_id from the classroom
+	termID := existing.TermID
+	if termID != "" {
+		teachersCol := db.MongoClient.Database("school_attendance").Collection("users")
+		for _, session := range newSessions {
+			teacherID := session.TeacherID
+
+			// Check if teacher already has this enrollment
+			var teacher struct {
+				Enrollments []models.Enrollment `bson:"enrollments"`
+			}
+
+			err := teachersCol.FindOne(ctx, bson.M{"_id": teacherID}).Decode(&teacher)
+			if err != nil {
+				// Teacher not found, continue with next session
+				continue
+			}
+
+			// Check if enrollment already exists
+			enrollmentExists := false
+			for _, enrollment := range teacher.Enrollments {
+				if enrollment.TermID == termID && enrollment.ClassroomID == classroomID {
+					enrollmentExists = true
+					break
+				}
+			}
+
+			// If enrollment doesn't exist, add it
+			if !enrollmentExists {
+				teacherUpdate := bson.M{
+					"$addToSet": bson.M{
+						"enrollments": bson.M{
+							"term_id":      termID,
+							"classroom_id": classroomID,
+						},
+					},
+				}
+
+				_, err := teachersCol.UpdateOne(ctx, bson.M{"_id": teacherID}, teacherUpdate)
+				if err != nil {
+					// Log error but don't fail the whole operation
+					fmt.Printf("Failed to add enrollment for teacher %s: %v\n", teacherID, err)
+				}
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
