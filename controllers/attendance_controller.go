@@ -17,11 +17,14 @@ import (
 // CheckInOrOutStudent handles check-in or check-out for a student
 func CheckInOrOutStudent(c *gin.Context) {
 	var input struct {
-		StudentID   string `json:"student_id"`
-		ClassroomID string `json:"classroom_id"`
-		TeacherID   string `json:"teacher_id"`
-		SessionID   string `json:"session_id"`
-		Status      string `json:"status"` // "checkin" or "checkout"
+		TermID       string `json:"term_id"`
+		DepartmentID string `json:"department_id"`
+		SchoolID     string `json:"school_id"`
+		StudentID    string `json:"student_id"`
+		ClassroomID  string `json:"classroom_id"`
+		TeacherID    string `json:"teacher_id"`
+		SessionID    string `json:"session_id"`
+		Status       string `json:"status"` // "checkin" or "checkout"
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -29,7 +32,7 @@ func CheckInOrOutStudent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
-	if input.StudentID == "" || input.ClassroomID == "" || input.TeacherID == "" ||
+	if input.StudentID == "" || input.ClassroomID == "" || input.TeacherID == "" || input.TermID == "" || input.DepartmentID == "" || input.SchoolID == "" ||
 		(input.Status != "checkin" && input.Status != "checkout") {
 		fmt.Printf("%v", input)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
@@ -44,22 +47,25 @@ func CheckInOrOutStudent(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
 
 	filter := bson.M{
-		"student_id":   input.StudentID,
-		"classroom_id": input.ClassroomID,
-		"session_id":   input.SessionID,
-		"date":         today,
-		"teacher_id":   input.TeacherID,
-		"status":       input.Status,
+		"student_id":    input.StudentID,
+		"classroom_id":  input.ClassroomID,
+		"session_id":    input.SessionID,
+		"date":          today,
+		"teacher_id":    input.TeacherID,
+		"status":        input.Status,
+		"term_id":       input.TermID,
+		"school_id":     input.SchoolID,
+		"department_id": input.DepartmentID,
 	}
 
 	var existing models.Attendance
 	err := col.FindOne(ctx, filter).Decode(&existing)
 
-	update := bson.M{}
 	now := time.Now()
 
 	if err == nil {
 		// Record already exists → Update status
+		var update bson.M
 		if input.Status == "checkin" {
 			update = bson.M{
 				"$set": bson.M{
@@ -93,12 +99,16 @@ func CheckInOrOutStudent(c *gin.Context) {
 
 	// No existing record → Create new check-in or check-out
 	newAttendance := models.Attendance{
-		ID:          "att-" + uuid.New().String(),
-		StudentID:   input.StudentID,
-		ClassroomID: input.ClassroomID,
-		TeacherID:   input.TeacherID,
-		Date:        today,
-		Status:      input.Status,
+		ID:           "att-" + uuid.New().String(),
+		StudentID:    input.StudentID,
+		ClassroomID:  input.ClassroomID,
+		TeacherID:    input.TeacherID,
+		Date:         today,
+		Status:       input.Status,
+		SessionID:    input.SessionID,
+		SchoolID:     input.SchoolID,
+		TermID:       input.TermID,
+		DepartmentID: input.DepartmentID,
 	}
 
 	if input.Status == "checkin" {

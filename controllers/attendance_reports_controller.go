@@ -83,6 +83,7 @@ func getTeacherClassroomIDs(ctx context.Context, teacherID string) ([]string, er
 // GET /attendance/by-classroom/:classroomId?date=YYYY-MM-DD&from=YYYY-MM-DD&to=YYYY-MM-DD
 func AttendanceByClassroom(c *gin.Context) {
 	classroom_id := c.Param("classroom_id")
+	date := c.Query("date")
 	if classroom_id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing classroom_id"})
 		return
@@ -143,11 +144,10 @@ func AttendanceByClassroom(c *gin.Context) {
 
 	// ---- fetch today's attendance for the classroom ----
 	attendanceCol := db.MongoClient.Database("school_attendance").Collection("attendance")
-	today := time.Now().Format("2006-01-02")
 
 	filter := bson.M{
 		"classroom_id": classroom_id,
-		"date":         today,
+		"date":         date,
 	}
 
 	cur, err := attendanceCol.Find(ctx, filter)
@@ -165,7 +165,7 @@ func AttendanceByClassroom(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"classroom_id": classroom_id,
-		"date":         today,
+		"date":         date,
 		"items":        out,
 	})
 }

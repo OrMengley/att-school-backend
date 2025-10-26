@@ -7,6 +7,7 @@ type Enrollment struct {
 
 type Student struct {
 	ID          string       `bson:"_id" json:"_id"`
+	SchoolID    string       `bson:"school_id" json:"school_id"`
 	FirstName   string       `bson:"firstName,omitempty" json:"firstName,omitempty"` // optional
 	LastName    string       `bson:"lastName,omitempty" json:"lastName,omitempty"`   // optional
 	Name        string       `bson:"name" json:"name"`
@@ -20,4 +21,5 @@ type Student struct {
 	CreatedAt   string       `bson:"createdAt" json:"createdAt"`
 	ClassroomID string       `bson:"classroom_id,omitempty" json:"classroom_id,omitempty"`
 	TermID      string       `bson:"term_id,omitempty" json:"term_id,omitempty"`
+	IdNumber    string       `bson:"id_number,omitempty" json:"id_number,omitempty"` // optional
 }
