@@ -44,9 +44,15 @@ func CreateSchool(c *gin.Context) {
 	}
 
 	type SchoolInput struct {
-		ID      string `json:"_id"`
-		Name    string `json:"name"`
-		Address string `json:"address"`
+		ID         string   `json:"_id"`
+		Name       string   `json:"name"`
+		Address    string   `json:"address"`
+		Location   string   `json:"location,omitempty"`
+		IsUpdating bool     `json:"is_updating,omitempty"`
+		IsActive   bool     `json:"is_active,omitempty"`
+		DocFiles   []string `json:"doc_files,omitempty"`
+		LogoUrl    string   `json:"logo_url,omitempty"`
+		UpdatedAt  string   `json:"updated_at,omitempty"`
 	}
 
 	var input SchoolInput
@@ -62,10 +68,16 @@ func CreateSchool(c *gin.Context) {
 	}
 
 	school := bson.M{
-		"_id":       input.ID,
-		"name":      input.Name,
-		"address":   input.Address,
-		"createdAt": time.Now(),
+		"_id":         input.ID,
+		"name":        input.Name,
+		"address":     input.Address,
+		"logo_url":    input.LogoUrl,
+		"location":    input.Location,
+		"is_updating": input.IsUpdating,
+		"is_active":   input.IsActive,
+		"doc_files":   input.DocFiles,
+		"created_at":  time.Now().Format(time.RFC3339),
+		"updated_at":  input.UpdatedAt,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

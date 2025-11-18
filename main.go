@@ -41,7 +41,7 @@ func main() {
 	r.POST("/attendance/check", controllers.CheckInOrOutStudent)
 	r.GET("/students/classroom/:classroom_id", controllers.GetStudentsByClassroom)
 	// r.GET("/schools/:id", controllers.GetSchool) is use to fetch only school infor for teacher
-	r.GET("/schools/:id", controllers.GetSchool)
+	r.GET("/schools/:_id", controllers.GetSchool)
 	r.GET("/attendance/session/:session_id", controllers.GetAttendanceBySession)
 	// r.GET("/terms/department/:department_id", controllers.GetTermsByDepartmentID) // input deparment id for select term
 	// Protected routes
@@ -63,6 +63,7 @@ func main() {
 		protected.PUT("/grades/:id", controllers.UpdateGrade)
 		protected.POST("/classrooms", controllers.CreateClassroom)
 		protected.GET("/classrooms", controllers.GetClassrooms)
+		protected.GET("/classrooms/term/:term_id/teacher/:teacher_id", controllers.GetClassroomByTeacherIDTermID) // to get classroom for view report
 		protected.PUT("/classrooms/:id", controllers.UpdateClassroom)
 		protected.PUT("/classrooms/:id/assign-teacher", controllers.AssignTeacherToClassroom)
 		protected.PUT("/classrooms/:id/assign-students", controllers.AssignStudentsToClassroom)
@@ -87,6 +88,7 @@ func main() {
 		protected.GET("/student/:id", controllers.GetStudent)
 		protected.GET("/classrooms/term/:term_id", controllers.GetClassroomByTermID)
 		protected.GET("/students/school/:school_id", controllers.GetStudentsBySchoolID)
+
 	}
 	r.Run(":8080")
 }

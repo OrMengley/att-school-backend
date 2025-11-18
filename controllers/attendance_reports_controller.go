@@ -123,9 +123,10 @@ func AttendanceByClassroom(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}
-		// classroomIds: []string
+
+		// Check if teacher owns the classroom directly (in classroomIds)
 		okOwned := false
-		if arr, ok := teacher["classroomIds"].(bson.A); ok {
+		if arr, ok := teacher["classroomIds"].(bson.A); ok && arr != nil {
 			for _, v := range arr {
 				if s, _ := v.(string); s == classroom_id {
 					okOwned = true
@@ -133,6 +134,29 @@ func AttendanceByClassroom(c *gin.Context) {
 				}
 			}
 		}
+
+		// If not directly owned, check if teacher is assigned to any sessions in this classroom
+		if !okOwned {
+			// Load the classroom to check sessions
+			var classroomDoc struct {
+				Sessions []struct {
+					TeacherID string `bson:"teacher_id"`
+				} `bson:"sessions"`
+			}
+			if err := classroomsCol.FindOne(ctx, bson.M{"_id": classroom_id}).Decode(&classroomDoc); err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: classroom not accessible"})
+				return
+			}
+
+			// Check if any session is assigned to this teacher
+			for _, session := range classroomDoc.Sessions {
+				if session.TeacherID == user_id {
+					okOwned = true
+					break
+				}
+			}
+		}
+
 		if !okOwned {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: not your classroom"})
 			return
@@ -145,9 +169,15 @@ func AttendanceByClassroom(c *gin.Context) {
 	// ---- fetch today's attendance for the classroom ----
 	attendanceCol := db.MongoClient.Database("school_attendance").Collection("attendance")
 
+	// Filter by classroom_id only, not by teacher_id
+	// This allows teachers to see all attendance records for their classroom
 	filter := bson.M{
 		"classroom_id": classroom_id,
-		"date":         date,
+	}
+
+	// Add date filter if provided
+	if date != "" {
+		filter["date"] = date
 	}
 
 	cur, err := attendanceCol.Find(ctx, filter)

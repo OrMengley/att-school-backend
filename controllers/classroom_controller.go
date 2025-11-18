@@ -422,6 +422,7 @@ func AssignTeacherToClassroom(c *gin.Context) {
 
 // AddSessionToClassroom adds a single session to an existing classroom
 // AddSessionToClassroom adds one or more sessions to an existing classroom
+// AddSessionToClassroom adds one or more sessions to an existing classroom
 func AddSessionToClassroom(c *gin.Context) {
 	classroomID := c.Param("id")
 	if classroomID == "" {
@@ -470,8 +471,10 @@ func AddSessionToClassroom(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
-	// 1. Check for required fields and time correctness
+	classroomCol := db.MongoClient.Database("school_attendance").Collection("classrooms")
+	userCol := db.MongoClient.Database("school_attendance").Collection("users")
+
+	// 1. Validate each session time and required fields
 	for _, s := range newSessions {
 		if s.SubjectName == "" || s.TeacherID == "" || s.SessionDay == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required fields"})
@@ -483,26 +486,24 @@ func AddSessionToClassroom(c *gin.Context) {
 		endH, _ := strconv.Atoi(s.SessionEndHour)
 		endM, _ := strconv.Atoi(s.SessionEndMin)
 
-		start := startH*60 + startM
-		end := endH*60 + endM
-		if start >= end {
+		if startH*60+startM >= endH*60+endM {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Start time must be before end time"})
 			return
 		}
 	}
 
-	// 2. Fetch existing sessions for this classroom
+	// 2. Fetch existing sessions + TermID
 	var existing struct {
 		Sessions []models.Session `bson:"sessions"`
 		TermID   string           `bson:"term_id"`
 	}
-	err := col.FindOne(ctx, bson.M{"_id": classroomID}).Decode(&existing)
+	err := classroomCol.FindOne(ctx, bson.M{"_id": classroomID}).Decode(&existing)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
 		return
 	}
 
-	// 3. Validate against overlapping sessions for the same day
+	// 3. Validate for overlapping sessions
 	mustParse := func(hh, mm string) int {
 		h, _ := strconv.Atoi(hh)
 		m, _ := strconv.Atoi(mm)
@@ -517,7 +518,6 @@ func AddSessionToClassroom(c *gin.Context) {
 			if es.SessionDay == ns.SessionDay {
 				esStart := mustParse(es.SessionStartHour, es.SessionStartMin)
 				esEnd := mustParse(es.SessionEndHour, es.SessionEndMin)
-				// Check overlap
 				if nsStart < esEnd && nsEnd > esStart {
 					c.JSON(http.StatusBadRequest, gin.H{
 						"error": fmt.Sprintf("Session conflict on %s with %s", ns.SessionDay, es.SubjectName),
@@ -528,9 +528,7 @@ func AddSessionToClassroom(c *gin.Context) {
 		}
 	}
 
-	// ------------------- END VALIDATION -------------------
-
-	// Use $push with $each to append multiple sessions
+	// 4. Push sessions to classroom
 	update := bson.M{
 		"$push": bson.M{
 			"sessions": bson.M{
@@ -539,66 +537,56 @@ func AddSessionToClassroom(c *gin.Context) {
 		},
 	}
 
-	result, err := col.UpdateOne(ctx, bson.M{"_id": classroomID}, update)
-	if err != nil {
+	result, err := classroomCol.UpdateOne(ctx, bson.M{"_id": classroomID}, update)
+	if err != nil || result.MatchedCount == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add sessions"})
 		return
 	}
-	if result.MatchedCount == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found"})
-		return
-	}
 
-	// Add enrollment to teachers if they don't already have it
-	// Get the term_id from the classroom
-	termID := existing.TermID
-	if termID != "" {
-		teachersCol := db.MongoClient.Database("school_attendance").Collection("users")
-		for _, session := range newSessions {
-			teacherID := session.TeacherID
+	// 5. Update teacher enrollments
+	for _, s := range newSessions {
+		if s.TeacherID == "" {
+			continue
+		}
 
-			// Check if teacher already has this enrollment
-			var teacher struct {
-				Enrollments []models.Enrollment `bson:"enrollments"`
+		// Fetch the teacher
+		var teacher struct {
+			ID          string              `bson:"_id"`
+			Enrollments []models.Enrollment `bson:"enrollments"`
+		}
+
+		err := userCol.FindOne(ctx, bson.M{"_id": s.TeacherID}).Decode(&teacher)
+		if err != nil {
+			fmt.Printf("⚠️ Teacher %s not found\n", s.TeacherID)
+			continue
+		}
+
+		// Check if enrollment already exists
+		exists := false
+		for _, e := range teacher.Enrollments {
+			if e.ClassroomID == classroomID && e.TermID == existing.TermID {
+				exists = true
+				break
 			}
+		}
 
-			err := teachersCol.FindOne(ctx, bson.M{"_id": teacherID}).Decode(&teacher)
+		if !exists {
+			newEnrollment := models.Enrollment{
+				TermID:      existing.TermID,
+				ClassroomID: classroomID,
+			}
+			_, err := userCol.UpdateOne(ctx,
+				bson.M{"_id": s.TeacherID},
+				bson.M{"$push": bson.M{"enrollments": newEnrollment}},
+			)
 			if err != nil {
-				// Teacher not found, continue with next session
-				continue
-			}
-
-			// Check if enrollment already exists
-			enrollmentExists := false
-			for _, enrollment := range teacher.Enrollments {
-				if enrollment.TermID == termID && enrollment.ClassroomID == classroomID {
-					enrollmentExists = true
-					break
-				}
-			}
-
-			// If enrollment doesn't exist, add it
-			if !enrollmentExists {
-				teacherUpdate := bson.M{
-					"$addToSet": bson.M{
-						"enrollments": bson.M{
-							"term_id":      termID,
-							"classroom_id": classroomID,
-						},
-					},
-				}
-
-				_, err := teachersCol.UpdateOne(ctx, bson.M{"_id": teacherID}, teacherUpdate)
-				if err != nil {
-					// Log error but don't fail the whole operation
-					fmt.Printf("Failed to add enrollment for teacher %s: %v\n", teacherID, err)
-				}
+				fmt.Printf("⚠️ Failed to update teacher %s enrollment: %v\n", s.TeacherID, err)
 			}
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Sessions added successfully",
+		"message":  "Sessions added successfully and teacher enrollments updated",
 		"sessions": newSessions,
 	})
 }
@@ -799,5 +787,47 @@ func GetClassroomByTermID(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, results)
+}
+
+// GetClassroom by teacher_id and term_id
+// display for teacher
+
+func GetClassroomByTeacherIDTermID(c *gin.Context) {
+	teacherID := c.Param("teacher_id")
+	termID := c.Param("term_id")
+
+	if termID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term ID is required"})
+		return
+	}
+	if teacherID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Teacher ID is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := db.MongoClient.Database("school_attendance").Collection("classrooms")
+
+	cursor, err := col.Aggregate(ctx, bson.A{
+		bson.M{
+			"$match": bson.M{
+				"sessions.teacher_id": teacherID,
+				"term_id":             termID,
+			},
+		},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch classrooms"})
+		return
+	}
+	defer cursor.Close(ctx)
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode classrooms"})
+		return
+	}
 	c.JSON(http.StatusOK, results)
 }
