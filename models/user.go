@@ -2,6 +2,7 @@ package models
 
 type User struct {
 	ID                 string           `bson:"_id" json:"_id"`
+	AvatarUrl          string           `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
 	Name               string           `bson:"name" json:"name"`
 	Email              string           `bson:"email" json:"email"`
 	Password           string           `bson:"password" json:"password"` // ✅ FIXED HERE
