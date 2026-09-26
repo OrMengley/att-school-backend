@@ -373,7 +373,10 @@ func AdminSetUserPassword(c *gin.Context) {
 		return
 	}
 
-	userID := c.Param("_id")
+	userID := c.Param("id")
+	if userID == "" {
+		userID = c.Param("_id")
+	}
 	if userID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing user id"})
 		return
@@ -381,13 +384,23 @@ func AdminSetUserPassword(c *gin.Context) {
 
 	var input struct {
 		NewPassword string `json:"newPassword"`
+		Password    string `json:"password"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil || strings.TrimSpace(input.NewPassword) == "" {
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid password payload"})
 		return
 	}
 
-	hashed, err := utils.HashPassword(strings.TrimSpace(input.NewPassword))
+	newPass := strings.TrimSpace(input.NewPassword)
+	if newPass == "" {
+		newPass = strings.TrimSpace(input.Password)
+	}
+	if newPass == "" || len(newPass) < 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Password must be at least 6 characters"})
+		return
+	}
+
+	hashed, err := utils.HashPassword(newPass)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
@@ -667,7 +680,10 @@ func CreateUserV2(c *gin.Context) {
 // UpdateParentSubscriptions updates the subscribedStudents for a parent user.
 // Allowed by: super_admin, admin (school admin). Admin can only edit users in their own school.
 func UpdateParentSubscriptions(c *gin.Context) {
-	parentID := c.Param("_id")
+	parentID := c.Param("id")
+	if parentID == "" {
+		parentID = c.Param("_id")
+	}
 	if parentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing user id"})
 		return

@@ -42,8 +42,6 @@ func main() {
 	r.DELETE("/classrooms/:id/sessions/:session_id", controllers.RemoveSessionFromClassroom)
 	r.POST("/attendance/check", controllers.CheckInOrOutStudent)
 	r.GET("/students/classroom/:classroom_id", controllers.GetStudentsByClassroom)
-	// r.GET("/schools/:id", controllers.GetSchool) is use to fetch only school infor for teacher
-	r.GET("/schools/:_id", controllers.GetSchool)
 	r.GET("/attendance/session/:session_id", controllers.GetAttendanceBySession)
 	// r.GET("/terms/department/:department_id", controllers.GetTermsByDepartmentID) // input deparment id for select term
 	// Protected routes
@@ -53,12 +51,24 @@ func main() {
 		protected.GET("/users", controllers.GetAllUsers)
 		protected.POST("/schools", controllers.CreateSchool)
 		protected.GET("/schools", controllers.GetSchools)
+		protected.GET("/schools/:id", controllers.GetSchool)
+		protected.PUT("/schools/:id", controllers.UpdateSchool)
 		protected.POST("/departments", controllers.CreateDepartment)
 		protected.GET("/departments", controllers.GetDepartments)
 		protected.GET("/departments/school/:school_id", controllers.GetDepartmentsBySchoolID)
 		protected.PUT("/departments/:id", controllers.UpdateDepartment)
 		protected.POST("/terms", controllers.CreateTerm)
-		protected.GET("/terms", controllers.GetTermsBySchoolID) // ?schoolId=value
+		protected.GET("/terms", controllers.GetTermsBySchoolID) // ?school_id=value
+		protected.GET("/terms/trash", controllers.GetTrashedTermsBySchoolID) // ?school_id=value
+		protected.PUT("/terms/:id", controllers.UpdateTerm)
+		protected.DELETE("/terms/:id", controllers.SoftDeleteTerm)
+		protected.PUT("/terms/:id/trash", controllers.SoftDeleteTerm)
+		protected.PUT("/terms/:id/restore", controllers.RestoreTerm)
+		protected.POST("/terms/:id/restore", controllers.RestoreTerm)
+		protected.DELETE("/terms/:id/permanent", controllers.PermanentDeleteTerm)
+		protected.POST("/terms/trash", controllers.BulkSoftDeleteTerms)
+		protected.POST("/terms/restore", controllers.BulkRestoreTerms)
+		protected.POST("/terms/delete-permanent", controllers.BulkPermanentDeleteTerms)
 		protected.POST("/grades", controllers.CreateGrade)
 		protected.GET("/grades", controllers.GetGrades)
 		protected.GET("/grades/term/:term_id", controllers.GetGradesByTermID)
